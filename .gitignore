@@ -1,0 +1,25 @@
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+### Spring Boot ###
+HELP.md
+.env
+
+### Frontend ###
+src/frontend/node_modules/
+src/frontend/build/
+npm-debug.log*
+
+### Локальные загрузки ===
+uploads/
+
+### IDE ###
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+### Локальные инструменты/настройки (не часть проекта) ###
+.claude/
+.github/modernize/
+.github/java-upgrade/
