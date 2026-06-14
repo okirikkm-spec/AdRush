@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { mediaUrl } from "../services/api";
 
 const SCORES = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
@@ -44,13 +43,12 @@ function RatingPopup({ average, count, dist }) {
   );
 }
 
-export default function DrinkCard({ drink, rank, onClick }) {
+export default function DrinkCard({ drink, rank, onClick, ratingOpen, onRatingToggle, onRatingHover }) {
   const cover = mediaUrl(drink.coverUrl);
   const rankClass = rank === 1 ? "top1" : rank === 2 ? "top2" : rank === 3 ? "top3" : "";
-  const [showInfo, setShowInfo] = useState(false);
 
   return (
-    <div className={`drink-card ${rankClass} ${showInfo ? "info-open" : ""}`} onClick={onClick}>
+    <div className={`drink-card ${rankClass} ${ratingOpen ? "info-open" : ""}`} onClick={onClick}>
       <div className={`drink-rank ${rankClass}`}>{RANK_LABELS[rank] || rank}</div>
 
       {cover ? (
@@ -66,16 +64,16 @@ export default function DrinkCard({ drink, rank, onClick }) {
 
       <div
         className="drink-card-rating"
-        onPointerEnter={(e) => { if (e.pointerType === "mouse") setShowInfo(true); }}
-        onPointerLeave={(e) => { if (e.pointerType === "mouse") setShowInfo(false); }}
-        onClick={(e) => { e.stopPropagation(); setShowInfo((v) => !v); }}
+        onPointerEnter={(e) => { if (e.pointerType === "mouse") onRatingHover?.(true); }}
+        onPointerLeave={(e) => { if (e.pointerType === "mouse") onRatingHover?.(false); }}
+        onClick={(e) => { e.stopPropagation(); onRatingToggle?.(); }}
         title="Подробнее об оценках"
       >
         <div className="drink-card-rating-inner">
           <span className="rating-badge">
             {drink.averageRating > 0 ? drink.averageRating.toFixed(1) : "—"}
           </span>
-          {showInfo && (
+          {ratingOpen && (
             <RatingPopup
               average={drink.averageRating}
               count={drink.reviewCount || 0}

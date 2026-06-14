@@ -9,6 +9,8 @@ export default function MainPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selected, setSelected] = useState(null);
+  // id энергетика, у которого открыт попап с распределением оценок (одновременно — только один)
+  const [openRatingId, setOpenRatingId] = useState(null);
 
   useEffect(() => {
     document.title = "AdRush — рейтинг энергетиков";
@@ -36,7 +38,10 @@ export default function MainPage() {
               key={drink.id}
               drink={drink}
               rank={i + 1}
-              onClick={() => setSelected(drink)}
+              onClick={() => { setOpenRatingId(null); setSelected(drink); }}
+              ratingOpen={openRatingId === drink.id}
+              onRatingToggle={() => setOpenRatingId((id) => (id === drink.id ? null : drink.id))}
+              onRatingHover={(show) => setOpenRatingId(show ? drink.id : null)}
             />
           ))}
         </div>
