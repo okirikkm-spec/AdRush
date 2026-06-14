@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import ImageDropZone from "../components/ImageDropZone";
 import UserModeration from "../components/UserModeration";
+import AuditLog from "../components/AuditLog";
 import { fetchMe, createDrink, parseCatalog, addDrinkPhoto, addDrinkPhotoByUrl } from "../services/api";
 
 export default function AdminPage() {
@@ -38,6 +39,7 @@ export default function AdminPage() {
           <AddDrinkCard onCreated={(d) => navigate(`/drink/${d.id}`)} />
           <ParserCard />
           <UserModeration />
+          <AuditLog />
         </div>
       </div>
     </>

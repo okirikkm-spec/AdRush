@@ -40,7 +40,7 @@ public class DrinkController {
                                                    @RequestBody Map<String, String> body) {
         requireAdmin(currentUser);
         DrinkResponseDto created = drinkService.create(
-            body.get("name"), body.get("description"), body.get("coverUrl"));
+            currentUser, body.get("name"), body.get("description"), body.get("coverUrl"));
         return ResponseEntity.ok(created);
     }
 
@@ -66,7 +66,7 @@ public class DrinkController {
                                                    @AuthenticationPrincipal User currentUser,
                                                    @RequestBody Map<String, String> body) {
         requireAdmin(currentUser);
-        return ResponseEntity.ok(drinkService.update(id, body.get("name"), body.get("description")));
+        return ResponseEntity.ok(drinkService.update(currentUser, id, body.get("name"), body.get("description")));
     }
 
     /** Удаление энергетика целиком — только администратор. */
@@ -74,7 +74,7 @@ public class DrinkController {
     public ResponseEntity<Map<String, String>> delete(@PathVariable Long id,
                                                       @AuthenticationPrincipal User currentUser) {
         requireAdmin(currentUser);
-        drinkService.delete(id);
+        drinkService.delete(currentUser, id);
         return ResponseEntity.ok(Map.of("status", "ok"));
     }
 
@@ -84,7 +84,7 @@ public class DrinkController {
                                                         @PathVariable Long photoId,
                                                         @AuthenticationPrincipal User currentUser) {
         requireAdmin(currentUser);
-        return ResponseEntity.ok(drinkService.deletePhoto(id, photoId));
+        return ResponseEntity.ok(drinkService.deletePhoto(currentUser, id, photoId));
     }
 
     /** Ручной запуск парсера каталога — только для администратора. */

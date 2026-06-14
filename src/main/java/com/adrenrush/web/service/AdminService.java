@@ -3,6 +3,8 @@ package com.adrenrush.web.service;
 import com.adrenrush.web.dto.AdminUserDto;
 import com.adrenrush.web.entity.Review;
 import com.adrenrush.web.entity.User;
+import com.adrenrush.web.enums.AuditAction;
+import com.adrenrush.web.enums.AuditTargetType;
 import com.adrenrush.web.enums.RoleEnum;
 import com.adrenrush.web.exception.ApiException;
 import com.adrenrush.web.repository.DrinkPhotoRepository;
@@ -31,6 +33,7 @@ public class AdminService {
     private final DrinkPhotoRepository photoRepository;
     private final NotificationService notificationService;
     private final SuperAdmins superAdmins;
+    private final AuditService auditService;
 
     /* ── Список пользователей ── */
 
@@ -55,7 +58,7 @@ public class AdminService {
      * @param durationDays null/0 — навсегда, иначе временный бан на N дней.
      */
     @Transactional
-    public Map<String, Object> ban(Long targetId, String reason, Integer durationDays,
+    public Map<String, Object> ban(User actor, Long targetId, String reason, Integer durationDays,
                                    boolean deleteComments, List<Long> alsoBanUserIds) {
         if (reason == null || reason.isBlank()) {
             throw ApiException.badRequest("Укажите причину бана");
@@ -64,18 +67,25 @@ public class AdminService {
         ids.add(targetId);
         if (alsoBanUserIds != null) ids.addAll(alsoBanUserIds);
 
+        String term = durationDays != null && durationDays > 0 ? "на " + durationDays + " дн." : "навсегда";
         int banned = 0;
         int deletedComments = 0;
         for (Long id : ids.stream().distinct().toList()) {
             User u = userRepository.findById(id).orElse(null);
             // админов и супер-админов не баним
             if (u == null || u.getRole() == RoleEnum.ADMIN || superAdmins.is(u.getUsername())) continue;
+            int removed = 0;
             if (deleteComments) {
-                deletedComments += reviewRepository.countByUserId(u.getId());
+                removed = reviewRepository.countByUserId(u.getId());
+                deletedComments += removed;
                 reviewRepository.deleteByUserId(u.getId());
             }
             applyBan(u, reason, durationDays);
             banned++;
+            auditService.recordUser(actor, AuditAction.BAN, u,
+                "Бан " + term + " · причина: " + reason
+                    + (removed > 0 ? " · удалено комментариев: " + removed : "")
+                    + (id.equals(targetId) ? "" : " · по связи с осн. аккаунтом"));
         }
         return Map.of("banned", banned, "deletedComments", deletedComments);
     }
@@ -92,7 +102,7 @@ public class AdminService {
     }
 
     @Transactional
-    public void unban(Long userId) {
+    public void unban(User actor, Long userId) {
         User u = userRepository.findById(userId)
             .orElseThrow(() -> ApiException.notFound("Пользователь не найден"));
         u.setRole(RoleEnum.USER);
@@ -100,27 +110,32 @@ public class AdminService {
         u.setBanReason(null);
         userRepository.save(u);
         notificationService.notify(u, "UNBANNED", "Блокировка вашего аккаунта снята.");
+        auditService.recordUser(actor, AuditAction.UNBAN, u, "Блокировка снята");
     }
 
     /* ── Полное удаление пользователя ── */
 
     @Transactional
-    public void deleteUser(Long userId) {
+    public void deleteUser(User actor, Long userId) {
         User u = userRepository.findById(userId)
             .orElseThrow(() -> ApiException.notFound("Пользователь не найден"));
         if (u.getRole() == RoleEnum.ADMIN) {
             throw ApiException.badRequest("Нельзя удалить администратора");
         }
+        String username = u.getUsername();
+        int reviews = reviewRepository.countByUserId(userId);
         reviewRepository.deleteByUserId(userId);
         notificationRepository.deleteByUserId(userId);
         photoRepository.detachUploader(userId);
         userRepository.delete(u);
+        auditService.record(actor, AuditAction.DELETE_USER, AuditTargetType.USER, userId, username,
+            "Аккаунт удалён из БД" + (reviews > 0 ? " · вместе с отзывами: " + reviews : ""));
     }
 
     /* ── Удаление отзыва с указанием причины ── */
 
     @Transactional
-    public void deleteReview(Long reviewId, String reason) {
+    public void deleteReview(User actor, Long reviewId, String reason) {
         Review r = reviewRepository.findById(reviewId)
             .orElseThrow(() -> ApiException.notFound("Отзыв не найден"));
         User author = r.getUser();
@@ -130,6 +145,9 @@ public class AdminService {
         String msg = "Ваш отзыв на «" + drinkName + "» удалён модератором."
             + (reason != null && !reason.isBlank() ? " Причина: " + reason : "");
         notificationService.notify(author, "REVIEW_DELETED", msg);
+        auditService.recordUser(actor, AuditAction.DELETE_REVIEW, author,
+            "Удалён отзыв на «" + drinkName + "»"
+                + (reason != null && !reason.isBlank() ? ". Причина: " + reason : ""));
     }
 
     /* ── helpers ── */
@@ -161,8 +179,8 @@ public class AdminService {
     /* ── Выдача/снятие админки (только супер-админ) ── */
 
     @Transactional
-    public void setAdminRole(String callerUsername, Long targetId, boolean makeAdmin) {
-        if (!superAdmins.is(callerUsername)) {
+    public void setAdminRole(User actor, Long targetId, boolean makeAdmin) {
+        if (!superAdmins.is(actor.getUsername())) {
             throw ApiException.forbidden("Управлять админ-правами может только супер-администратор");
         }
         User target = userRepository.findById(targetId)
@@ -181,17 +199,22 @@ public class AdminService {
             notificationService.notify(target, "ROLE", "Права администратора сняты.");
         }
         userRepository.save(target);
+        auditService.recordUser(actor, makeAdmin ? AuditAction.GRANT_ADMIN : AuditAction.REVOKE_ADMIN,
+            target, makeAdmin ? "Выданы права администратора" : "Сняты права администратора");
     }
 
     /* ── Предупреждение пользователю ── */
 
     @Transactional
-    public void warn(Long userId, String message) {
+    public void warn(User actor, Long userId, String message) {
         User u = userRepository.findById(userId)
             .orElseThrow(() -> ApiException.notFound("Пользователь не найден"));
-        String text = (message == null || message.isBlank())
-            ? "Предупреждение от модератора: соблюдайте правила сообщества."
-            : "⚠ Предупреждение от модератора: " + message.trim();
+        boolean hasMsg = message != null && !message.isBlank();
+        String text = hasMsg
+            ? "⚠ Предупреждение от модератора: " + message.trim()
+            : "Предупреждение от модератора: соблюдайте правила сообщества.";
         notificationService.notify(u, "WARNING", text);
+        auditService.recordUser(actor, AuditAction.WARN, u,
+            hasMsg ? "Предупреждение: " + message.trim() : "Предупреждение (без текста)");
     }
 }

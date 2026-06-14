@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { mediaUrl, fetchReviews } from "../services/api";
 import Avatar from "./Avatar";
 
@@ -38,8 +38,8 @@ export default function DrinkModal({ drink, onClose }) {
   }, [reviews, sort]);
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-overlay" onMouseDown={onClose}>
+      <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
         {cover ? (
           <img className="modal-image" src={cover} alt={drink.name} />
         ) : (
@@ -92,10 +92,12 @@ export default function DrinkModal({ drink, onClose }) {
                 <div className="mini-review-list">
                   {sortedReviews.map((r) => (
                     <div className="mini-review" key={r.id}>
-                      <Avatar url={r.userAvatarUrl} name={r.userDisplayName} size={28} />
+                      <Link to={`/user/${r.userId}`}>
+                        <Avatar url={r.userAvatarUrl} name={r.userDisplayName} size={28} />
+                      </Link>
                       <div className="mini-review-body">
                         <div className="mini-review-head">
-                          <span className="mini-review-name">{r.userDisplayName}</span>
+                          <Link to={`/user/${r.userId}`} className="mini-review-name">{r.userDisplayName}</Link>
                           <span className="review-rating">★ {r.rating}</span>
                         </div>
                         {r.text && <div className="mini-review-text">{r.text}</div>}

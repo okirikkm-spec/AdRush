@@ -207,6 +207,22 @@ export function warnUser(userId, message) {
   return jsonRequest(`/api/admin/users/${userId}/warn`, { method: "POST", body: { message }, auth: true });
 }
 
+/* ─────────────── Журнал аудита (админ) ─────────────── */
+
+export function fetchAuditLog({ actorId, action, targetId, q, page = 0, size = 50 } = {}) {
+  const p = new URLSearchParams();
+  if (actorId) p.set("actorId", actorId);
+  if (action) p.set("action", action);
+  if (targetId) p.set("targetId", targetId);
+  if (q) p.set("q", q);
+  p.set("page", page);
+  p.set("size", size);
+  return jsonRequest(`/api/admin/audit?${p.toString()}`, { auth: true });
+}
+export function fetchAuditActors() {
+  return jsonRequest("/api/admin/audit/actors", { auth: true });
+}
+
 /* ─────────────── Уведомления ─────────────── */
 
 export function fetchNotifications() {

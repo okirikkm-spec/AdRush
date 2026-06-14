@@ -1,20 +1,26 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Avatar from "../components/Avatar";
 import TierList from "../components/TierList";
 import RatingStars from "../components/RatingStars";
-import { fetchUserProfile } from "../services/api";
+import BanModal from "../components/BanModal";
+import {
+  fetchUserProfile, fetchMe, isAuthenticated,
+  deleteReviewAsAdmin, warnUser,
+} from "../services/api";
 
 export default function UserPage() {
   const { id } = useParams();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [me, setMe] = useState(null);
+  const [banTarget, setBanTarget] = useState(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     setLoading(true);
-    fetchUserProfile(id)
+    return fetchUserProfile(id)
       .then((d) => {
         setData(d);
         document.title = `${d.user.displayName} — AdRush`;
@@ -22,6 +28,30 @@ export default function UserPage() {
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    load();
+    if (isAuthenticated()) fetchMe().then(setMe).catch(() => {});
+  }, [load]);
+
+  const isSelf = me && data && me.id === data.user.id;
+  const isAdmin = me?.role === "ADMIN";
+  const targetIsAdmin = data?.user.role === "ADMIN";
+  const canModerate = isAdmin && !isSelf && !targetIsAdmin;
+
+  const handleAdminDelete = async (reviewId) => {
+    const reason = window.prompt("Причина удаления отзыва (будет показана автору):", "");
+    if (reason === null) return;
+    try { await deleteReviewAsAdmin(reviewId, reason); await load(); }
+    catch (e) { alert(e.message); }
+  };
+
+  const handleWarn = async () => {
+    const msg = window.prompt(`Предупреждение для «${data.user.displayName}» (придёт уведомлением):`, "");
+    if (msg === null) return;
+    try { await warnUser(data.user.id, msg); alert("Предупреждение отправлено."); }
+    catch (e) { alert(e.message); }
+  };
 
   return (
     <>
@@ -41,6 +71,13 @@ export default function UserPage() {
                   {data.user.role === "ADMIN" && <span className="profile-role">Администратор</span>}
                 </div>
               </div>
+
+              {canModerate && (
+                <div className="row" style={{ marginTop: 16 }}>
+                  <button className="btn btn-secondary btn-sm" onClick={handleWarn}>⚠ Предупредить</button>
+                  <button className="btn btn-danger btn-sm" onClick={() => setBanTarget(data.user)}>🔨 Забанить</button>
+                </div>
+              )}
             </div>
 
             {!data.canSeeReviews ? (
@@ -65,6 +102,12 @@ export default function UserPage() {
                           <div className="review-head">
                             <Link to={`/drink/${r.drinkId}`} className="review-author">{r.drinkName}</Link>
                             <span className="review-rating">★ {r.rating}/10</span>
+                            {isAdmin && !isSelf && (
+                              <span className="review-mod" style={{ marginLeft: "auto" }}>
+                                <button className="review-mod-btn review-mod-del" title="Удалить отзыв (с причиной)"
+                                  onClick={() => handleAdminDelete(r.id)}>×</button>
+                              </span>
+                            )}
                           </div>
                           <RatingStars value={r.rating} readonly size={15} />
                           {r.text && <div className="review-text" style={{ marginTop: 6 }}>{r.text}</div>}
@@ -78,6 +121,11 @@ export default function UserPage() {
           </>
         )}
       </div>
+
+      {banTarget && (
+        <BanModal user={banTarget} onClose={() => setBanTarget(null)}
+          onDone={() => { setBanTarget(null); load(); }} />
+      )}
     </>
   );
 }

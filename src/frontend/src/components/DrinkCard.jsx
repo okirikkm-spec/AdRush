@@ -66,21 +66,23 @@ export default function DrinkCard({ drink, rank, onClick }) {
 
       <div
         className="drink-card-rating"
-        onMouseEnter={() => setShowInfo(true)}
-        onMouseLeave={() => setShowInfo(false)}
+        onPointerEnter={(e) => { if (e.pointerType === "mouse") setShowInfo(true); }}
+        onPointerLeave={(e) => { if (e.pointerType === "mouse") setShowInfo(false); }}
         onClick={(e) => { e.stopPropagation(); setShowInfo((v) => !v); }}
         title="Подробнее об оценках"
       >
-        <span className="rating-badge">
-          {drink.averageRating > 0 ? drink.averageRating.toFixed(1) : "—"}
-        </span>
-        {showInfo && (
-          <RatingPopup
-            average={drink.averageRating}
-            count={drink.reviewCount || 0}
-            dist={drink.ratingDistribution}
-          />
-        )}
+        <div className="drink-card-rating-inner">
+          <span className="rating-badge">
+            {drink.averageRating > 0 ? drink.averageRating.toFixed(1) : "—"}
+          </span>
+          {showInfo && (
+            <RatingPopup
+              average={drink.averageRating}
+              count={drink.reviewCount || 0}
+              dist={drink.ratingDistribution}
+            />
+          )}
+        </div>
       </div>
     </div>
   );

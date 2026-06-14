@@ -4,6 +4,8 @@ import com.adrenrush.web.dto.DrinkResponseDto;
 import com.adrenrush.web.entity.Drink;
 import com.adrenrush.web.entity.DrinkPhoto;
 import com.adrenrush.web.entity.User;
+import com.adrenrush.web.enums.AuditAction;
+import com.adrenrush.web.enums.AuditTargetType;
 import com.adrenrush.web.enums.PhotoSource;
 import com.adrenrush.web.exception.ApiException;
 import com.adrenrush.web.repository.DrinkPhotoRepository;
@@ -21,11 +23,13 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayInputStream;
 import java.text.Normalizer;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -37,6 +41,7 @@ public class DrinkService {
     private final DrinkPhotoRepository photoRepository;
     private final ReviewRepository reviewRepository;
     private final StorageService storageService;
+    private final AuditService auditService;
 
     /** Список всех энергетиков, отсортированный по средней оценке (по убыванию). */
     @Transactional(readOnly = true)
@@ -85,7 +90,7 @@ public class DrinkService {
     }
 
     @Transactional
-    public DrinkResponseDto create(String name, String description, String coverUrl) {
+    public DrinkResponseDto create(User actor, String name, String description, String coverUrl) {
         if (name == null || name.isBlank()) {
             throw ApiException.badRequest("Введите название энергетика");
         }
@@ -95,32 +100,52 @@ public class DrinkService {
         drink.setDescription(description);
         drinkRepository.save(drink);
 
-        if (coverUrl != null && !coverUrl.isBlank()) {
+        boolean hasCover = coverUrl != null && !coverUrl.isBlank();
+        if (hasCover) {
             addRemotePhoto(drink, coverUrl.trim(), PhotoSource.PARSED, null);
         }
+        auditService.record(actor, AuditAction.DRINK_CREATE, AuditTargetType.DRINK, drink.getId(), drink.getName(),
+            "Создана карточка «" + drink.getName() + "»"
+                + (description != null && !description.isBlank() ? " · с описанием" : "")
+                + (hasCover ? " · с обложкой" : ""));
         return toSummary(drink);
     }
 
     /** Редактирование энергетика (название/описание) — для администратора. */
     @Transactional
-    public DrinkResponseDto update(Long id, String name, String description) {
+    public DrinkResponseDto update(User actor, Long id, String name, String description) {
         Drink drink = drinkRepository.findById(id)
             .orElseThrow(() -> ApiException.notFound("Энергетик не найден"));
-        if (name != null && !name.isBlank()) {
+
+        String oldName = drink.getName();
+        String oldDesc = drink.getDescription();
+        List<String> changes = new ArrayList<>();
+
+        if (name != null && !name.isBlank() && !name.trim().equals(oldName)) {
+            changes.add("название: «" + oldName + "» → «" + name.trim() + "»");
             drink.setName(name.trim());
         }
-        if (description != null) {
+        if (description != null && !Objects.equals(description, oldDesc)) {
+            changes.add(describeDescChange(oldDesc, description));
             drink.setDescription(description);
         }
         drinkRepository.save(drink);
+
+        if (!changes.isEmpty()) {
+            auditService.record(actor, AuditAction.DRINK_UPDATE, AuditTargetType.DRINK, drink.getId(), drink.getName(),
+                String.join("; ", changes));
+        }
         return getById(id);
     }
 
     /** Полное удаление энергетика (фото из хранилища, отзывы, сама карточка) — для администратора. */
     @Transactional
-    public void delete(Long id) {
+    public void delete(User actor, Long id) {
         Drink drink = drinkRepository.findById(id)
             .orElseThrow(() -> ApiException.notFound("Энергетик не найден"));
+        String name = drink.getName();
+        int photos = photoRepository.countByDrinkId(id);
+        int reviews = count(id);
         // удаляем файлы фотографий из хранилища
         for (DrinkPhoto p : photoRepository.findByDrinkIdOrderByPositionAscIdAsc(id)) {
             storageService.delete(p.getUrl());
@@ -129,19 +154,36 @@ public class DrinkService {
         reviewRepository.deleteByDrinkId(id);
         // удаление карточки каскадно убирает строки фотографий
         drinkRepository.delete(drink);
+
+        auditService.record(actor, AuditAction.DRINK_DELETE, AuditTargetType.DRINK, id, name,
+            "Удалена карточка «" + name + "»"
+                + (reviews > 0 ? " · отзывов: " + reviews : "")
+                + (photos > 0 ? " · фото: " + photos : ""));
     }
 
     /** Удаление фотографии из галереи (вместе с файлом в хранилище) — для администратора. */
     @Transactional
-    public DrinkResponseDto deletePhoto(Long drinkId, Long photoId) {
+    public DrinkResponseDto deletePhoto(User actor, Long drinkId, Long photoId) {
         DrinkPhoto photo = photoRepository.findById(photoId)
             .orElseThrow(() -> ApiException.notFound("Фотография не найдена"));
         if (!photo.getDrink().getId().equals(drinkId)) {
             throw ApiException.badRequest("Фото не относится к этому энергетику");
         }
+        String drinkName = photo.getDrink().getName();
         storageService.delete(photo.getUrl());
         photoRepository.delete(photo);
+
+        auditService.record(actor, AuditAction.DRINK_UPDATE, AuditTargetType.DRINK, drinkId, drinkName,
+            "Удалено фото из галереи");
         return getById(drinkId);
+    }
+
+    private String describeDescChange(String oldDesc, String newDesc) {
+        boolean oldEmpty = oldDesc == null || oldDesc.isBlank();
+        boolean newEmpty = newDesc == null || newDesc.isBlank();
+        if (oldEmpty && !newEmpty) return "добавлено описание";
+        if (!oldEmpty && newEmpty) return "описание очищено";
+        return "описание изменено";
     }
 
     /** Добавляет пользовательское фото в конец галереи. */
