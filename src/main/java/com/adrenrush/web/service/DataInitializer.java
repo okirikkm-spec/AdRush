@@ -37,6 +37,7 @@ public class DataInitializer implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         ensureAdmin();
         promoteSuperAdmins();
+        drinkService.backfillMissingBrands();
         firstRunParse();
     }
 
@@ -78,8 +79,8 @@ public class DataInitializer implements ApplicationRunner {
         if (drinkService.count() > 0) return;
         log.info("База энергетиков пуста — выполняем полный первичный парсинг каталога");
         new Thread(() -> {
-            int created = parserService.parse(true);
-            log.info("Первичный парсинг завершён: создано {} энергетиков", created);
+            DrinkService.ParseResult r = parserService.parse(false);
+            log.info("Первичный парсинг завершён: создано {} энергетиков", r.created());
         }, "initial-parser").start();
     }
 }

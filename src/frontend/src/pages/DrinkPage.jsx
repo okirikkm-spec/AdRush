@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import PhotoGallery from "../components/PhotoGallery";
 import ReviewSection from "../components/ReviewSection";
+import CoverFramerModal from "../components/CoverFramerModal";
 import { fetchDrink, fetchMe, updateDrink, deleteDrink, isAuthenticated } from "../services/api";
 
 export default function DrinkPage() {
@@ -22,6 +23,9 @@ export default function DrinkPage() {
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [savingName, setSavingName] = useState(false);
+
+  // Настройка кадрирования обложки (для администратора)
+  const [framing, setFraming] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -126,6 +130,18 @@ export default function DrinkPage() {
               )}
             </div>
 
+            {drink.brand && !editingName && (
+              <span className="drink-card-brand" style={{ marginBottom: 14 }}>{drink.brand}</span>
+            )}
+
+            {isAdmin && drink.photos?.length > 0 && (
+              <div className="row" style={{ marginBottom: 12 }}>
+                <button className="btn btn-secondary btn-sm" onClick={() => setFraming(true)}>
+                  🖼️ Кадрирование обложки
+                </button>
+              </div>
+            )}
+
             <PhotoGallery
               drinkId={drink.id}
               photos={drink.photos || []}
@@ -172,6 +188,10 @@ export default function DrinkPage() {
           </>
         )}
       </div>
+
+      {framing && drink && (
+        <CoverFramerModal drink={drink} onClose={() => setFraming(false)} onSaved={(u) => setDrink(u)} />
+      )}
     </>
   );
 }

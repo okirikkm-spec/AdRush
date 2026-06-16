@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { mediaUrl, fetchReviews } from "../services/api";
+import { coverStyle } from "../utils/coverStyle";
 import Avatar from "./Avatar";
 
 export default function DrinkModal({ drink, onClose }) {
@@ -41,7 +42,8 @@ export default function DrinkModal({ drink, onClose }) {
     <div className="modal-overlay" onMouseDown={onClose}>
       <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
         {cover ? (
-          <img className="modal-image" src={cover} alt={drink.name} />
+          <img className="modal-image" src={cover} alt={drink.name}
+            style={coverStyle(drink.coverFitModal, drink.coverPosModal)} />
         ) : (
           <div className="modal-image gallery-main-empty">⚡ нет фото</div>
         )}
@@ -50,6 +52,8 @@ export default function DrinkModal({ drink, onClose }) {
           <div className="modal-header">
             <h2 className="modal-title">{drink.name}</h2>
           </div>
+
+          {drink.brand && <span className="drink-card-brand" style={{ marginBottom: 8 }}>{drink.brand}</span>}
 
           <div className="row" style={{ marginBottom: 6 }}>
             <span className="rating-badge" style={{ fontSize: 18 }}>

@@ -136,8 +136,21 @@ export function deleteDrink(id) {
 export function deleteDrinkPhoto(drinkId, photoId) {
   return jsonRequest(`/api/drinks/${drinkId}/photos/${photoId}`, { method: "DELETE", auth: true });
 }
-export function parseCatalog(full = false) {
-  return jsonRequest(`/api/drinks/parse?full=${full}`, { method: "POST", auth: true });
+/** Сохранить кадрирование обложки (ракурс для карточки и окна). */
+export function updateCoverFraming(id, framing) {
+  return jsonRequest(`/api/drinks/${id}/cover`, { method: "PUT", body: framing, auth: true });
+}
+/** Изменить порядок фотографий (массив id в нужном порядке; первое — обложка). */
+export function reorderDrinkPhotos(id, order) {
+  return jsonRequest(`/api/drinks/${id}/photos/order`, { method: "PUT", body: { order }, auth: true });
+}
+/** Бренды, для которых на бэкенде есть парсер каталога. */
+export function fetchParseSources() {
+  return jsonRequest(`/api/drinks/parse/sources`, { auth: true });
+}
+/** Запустить парсинг выбранных брендов. reparse=false — только новые; true — обновить и существующие. */
+export function runParse({ brands, reparse = false }) {
+  return jsonRequest(`/api/drinks/parse`, { method: "POST", body: { brands, reparse }, auth: true });
 }
 export async function addDrinkPhoto(id, file) {
   const formData = new FormData();

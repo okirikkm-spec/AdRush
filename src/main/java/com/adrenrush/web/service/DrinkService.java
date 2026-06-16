@@ -65,23 +65,81 @@ public class DrinkService {
         return DrinkResponseDto.full(drink, avg, count, distribution(drink.getId()), photos);
     }
 
-    /** Создаёт энергетик из спарсенной записи. Возвращает true, если создан новый. */
+    /** Итог обработки одной спарсенной записи. */
+    public enum ParseOutcome { CREATED, UPDATED, SKIPPED }
+
+    /** Сводка прохода парсера: сколько карточек создано и сколько обновлено. */
+    public record ParseResult(int created, int updated) {}
+
+    /**
+     * Заводит или обновляет энергетик из спарсенной записи. Дедупликация — по {@code sourceUrl}.
+     *
+     * @param brand         бренд (источник парсинга), проставляется и при создании, и при обновлении
+     * @param downloadCover true — скачать обложку в наше хранилище; false — сохранить внешнюю ссылку
+     *                      как есть (для CDN, тротлящих серверное скачивание, например Monster)
+     * @param reparse       false — существующие записи пропускаются (только новые);
+     *                      true — у существующих обновляются название/описание/бренд из источника
+     * @return CREATED — создана новая карточка; UPDATED — обновлена существующая; SKIPPED — без изменений
+     */
     @Transactional
-    public boolean createFromParser(String name, String description, String coverUrl, String sourceUrl) {
-        if (sourceUrl != null && drinkRepository.existsBySourceUrl(sourceUrl)) {
-            return false;
+    public ParseOutcome upsertFromParser(String name, String description, String brand, String coverUrl,
+                                         String sourceUrl, boolean downloadCover, boolean reparse) {
+        Drink existing = sourceUrl != null ? drinkRepository.findBySourceUrl(sourceUrl).orElse(null) : null;
+        if (existing != null) {
+            if (!reparse) return ParseOutcome.SKIPPED;
+            boolean changed = false;
+            if (name != null && !name.isBlank() && !name.trim().equals(existing.getName())) {
+                existing.setName(name.trim());
+                changed = true;
+            }
+            if (description != null && !Objects.equals(description, existing.getDescription())) {
+                existing.setDescription(description);
+                changed = true;
+            }
+            if (brand != null && !brand.isBlank() && !brand.equals(existing.getBrand())) {
+                existing.setBrand(brand);
+                changed = true;
+            }
+            if (changed) drinkRepository.save(existing);
+            return changed ? ParseOutcome.UPDATED : ParseOutcome.SKIPPED;
         }
+
         Drink drink = new Drink();
         drink.setName(name.trim());
+        drink.setBrand(brand);
         drink.setSlug(uniqueSlug(name.trim()));
         drink.setDescription(description);
         drink.setSourceUrl(sourceUrl);
         drinkRepository.save(drink);
 
         if (coverUrl != null && !coverUrl.isBlank()) {
-            addRemotePhoto(drink, coverUrl.trim(), PhotoSource.PARSED, null);
+            if (downloadCover) {
+                addRemotePhoto(drink, coverUrl.trim(), PhotoSource.PARSED, null);
+            } else {
+                addPhoto(drink, coverUrl.trim(), PhotoSource.PARSED, null);
+            }
         }
-        return true;
+        return ParseOutcome.CREATED;
+    }
+
+    /** Проставляет бренд карточкам, у которых он ещё не задан (однократный бэкафилл по источнику/названию). */
+    @Transactional
+    public void backfillMissingBrands() {
+        for (Drink d : drinkRepository.findAll()) {
+            if (d.getBrand() != null && !d.getBrand().isBlank()) continue;
+            d.setBrand(inferBrand(d.getSourceUrl(), d.getName()));
+            drinkRepository.save(d);
+        }
+    }
+
+    /** Эвристика бренда по ссылке-источнику и названию (для бэкафилла старых записей). */
+    private String inferBrand(String sourceUrl, String name) {
+        String s = (sourceUrl == null ? "" : sourceUrl).toLowerCase(Locale.ROOT);
+        String n = (name == null ? "" : name).toLowerCase(Locale.ROOT);
+        if (s.contains("monster") || n.startsWith("monster") || n.contains("monster")) {
+            return MonsterParserService.BRAND;
+        }
+        return ParserService.BRAND;
     }
 
     @Transactional(readOnly = true)
@@ -90,12 +148,13 @@ public class DrinkService {
     }
 
     @Transactional
-    public DrinkResponseDto create(User actor, String name, String description, String coverUrl) {
+    public DrinkResponseDto create(User actor, String name, String brand, String description, String coverUrl) {
         if (name == null || name.isBlank()) {
             throw ApiException.badRequest("Введите название энергетика");
         }
         Drink drink = new Drink();
         drink.setName(name.trim());
+        drink.setBrand(brand != null && !brand.isBlank() ? brand.trim() : null);
         drink.setSlug(uniqueSlug(name.trim()));
         drink.setDescription(description);
         drinkRepository.save(drink);
@@ -138,6 +197,32 @@ public class DrinkService {
         return getById(id);
     }
 
+    /** Настройка кадрирования обложки (ракурс на карточке и в окне) — для администратора. */
+    @Transactional
+    public DrinkResponseDto updateCoverFraming(User actor, Long id, String fitCard, String posCard,
+                                               String fitModal, String posModal) {
+        Drink drink = drinkRepository.findById(id)
+            .orElseThrow(() -> ApiException.notFound("Энергетик не найден"));
+        drink.setCoverFitCard(sanitizeFit(fitCard));
+        drink.setCoverPosCard(sanitizePos(posCard));
+        drink.setCoverFitModal(sanitizeFit(fitModal));
+        drink.setCoverPosModal(sanitizePos(posModal));
+        drinkRepository.save(drink);
+        auditService.record(actor, AuditAction.DRINK_UPDATE, AuditTargetType.DRINK, drink.getId(), drink.getName(),
+            "Настроено кадрирование обложки");
+        return getById(id);
+    }
+
+    /** Допускаем только два значения object-fit; иначе — null (значение по умолчанию на фронте). */
+    private String sanitizeFit(String fit) {
+        return ("cover".equals(fit) || "contain".equals(fit)) ? fit : null;
+    }
+
+    /** Принимаем object-position только в формате "NN% NN%"; иначе — null. */
+    private String sanitizePos(String pos) {
+        return (pos != null && pos.matches("\\d{1,3}% \\d{1,3}%")) ? pos : null;
+    }
+
     /** Полное удаление энергетика (фото из хранилища, отзывы, сама карточка) — для администратора. */
     @Transactional
     public void delete(User actor, Long id) {
@@ -175,6 +260,30 @@ public class DrinkService {
 
         auditService.record(actor, AuditAction.DRINK_UPDATE, AuditTargetType.DRINK, drinkId, drinkName,
             "Удалено фото из галереи");
+        return getById(drinkId);
+    }
+
+    /** Меняет порядок фотографий по списку их id (позиция = индекс в списке). Первое фото — обложка. */
+    @Transactional
+    public DrinkResponseDto reorderPhotos(User actor, Long drinkId, List<Long> orderedIds) {
+        Drink drink = drinkRepository.findById(drinkId)
+            .orElseThrow(() -> ApiException.notFound("Энергетик не найден"));
+        List<DrinkPhoto> photos = photoRepository.findByDrinkIdOrderByPositionAscIdAsc(drinkId);
+        Map<Long, DrinkPhoto> byId = new LinkedHashMap<>();
+        for (DrinkPhoto p : photos) byId.put(p.getId(), p);
+
+        if (orderedIds == null || orderedIds.size() != photos.size() || !byId.keySet().containsAll(orderedIds)) {
+            throw ApiException.badRequest("Некорректный порядок фотографий");
+        }
+
+        int pos = 0;
+        for (Long id : orderedIds) {
+            DrinkPhoto p = byId.get(id);
+            p.setPosition(pos++);
+            photoRepository.save(p);
+        }
+        auditService.record(actor, AuditAction.DRINK_UPDATE, AuditTargetType.DRINK, drinkId, drink.getName(),
+            "Изменён порядок фотографий");
         return getById(drinkId);
     }
 

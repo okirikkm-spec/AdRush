@@ -28,6 +28,9 @@ public class ParserService {
     private static final String USER_AGENT =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36";
 
+    /** Бренд, который проставляется всем карточкам из этого каталога. */
+    public static final String BRAND = "Adrenaline Rush";
+
     private final DrinkService drinkService;
 
     @Value("${parser.url}")
@@ -45,13 +48,14 @@ public class ParserService {
     }
 
     /**
-     * Обходит все карточки товаров на странице. Новизна определяется дедупликацией
-     * по ссылке изображения (у SPA нет отдельных URL у товаров).
+     * Обходит все карточки товаров на странице. Дедупликация — по ссылке изображения
+     * (у SPA нет отдельных URL у товаров).
      *
-     * @param fullScan оставлен для совместимости; обход всегда полный (товаров немного)
-     * @return сколько новых энергетиков создано
+     * @param reparse false — заводятся только новые карточки; true — у существующих обновляются
+     *                название/описание из источника
+     * @return сводка: создано/обновлено
      */
-    public int parse(boolean fullScan) {
+    public DrinkService.ParseResult parse(boolean reparse) {
         try {
             Document doc = Jsoup.connect(catalogUrl)
                 .userAgent(USER_AGENT)
@@ -61,10 +65,11 @@ public class ParserService {
             Elements cards = doc.select("div.product-item");
             if (cards.isEmpty()) {
                 log.warn("Парсер: не найдено ни одной карточки (div.product-item). Структура сайта могла измениться.");
-                return 0;
+                return new DrinkService.ParseResult(0, 0);
             }
 
             int created = 0;
+            int updated = 0;
             Set<String> seen = new HashSet<>();
 
             for (Element card : cards) {
@@ -83,21 +88,24 @@ public class ParserService {
 
                 String description = descEl != null ? normalize(descEl.text()) : null;
 
-                // sourceUrl = imageUrl: уникальный стабильный ключ для existsBySourceUrl
-                boolean isNew = drinkService.createFromParser(name, description, imageUrl, imageUrl);
-                if (isNew) {
+                // sourceUrl = imageUrl: уникальный стабильный ключ для дедупликации
+                DrinkService.ParseOutcome outcome =
+                    drinkService.upsertFromParser(name, description, BRAND, imageUrl, imageUrl, true, reparse);
+                if (outcome == DrinkService.ParseOutcome.CREATED) {
                     created++;
                     log.info("Парсер: добавлен энергетик '{}' ({})", name, imageUrl);
+                } else if (outcome == DrinkService.ParseOutcome.UPDATED) {
+                    updated++;
                 }
             }
 
-            if (created == 0) {
-                log.info("Парсер: новых энергетиков не найдено");
+            if (created == 0 && updated == 0) {
+                log.info("Парсер: изменений не найдено");
             }
-            return created;
+            return new DrinkService.ParseResult(created, updated);
         } catch (Exception e) {
             log.warn("Парсер: ошибка обхода {}: {}", catalogUrl, e.getMessage());
-            return 0;
+            return new DrinkService.ParseResult(0, 0);
         }
     }
 

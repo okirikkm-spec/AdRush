@@ -14,6 +14,7 @@ export default function App() {
   return (
     <ThemeProvider>
       <div className="bg-grid" aria-hidden="true" />
+      <div className="corner-glow" aria-hidden="true" />
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<MainPage />} />

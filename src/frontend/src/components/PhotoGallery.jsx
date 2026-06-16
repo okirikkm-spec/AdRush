@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { mediaUrl, addDrinkPhoto, addDrinkPhotoByUrl, deleteDrinkPhoto, isAuthenticated } from "../services/api";
+import { mediaUrl, addDrinkPhoto, addDrinkPhotoByUrl, deleteDrinkPhoto, reorderDrinkPhotos } from "../services/api";
+import { coverStyle } from "../utils/coverStyle";
 import ImageDropZone from "./ImageDropZone";
 
 export default function PhotoGallery({ drinkId, photos, onUpdated, canManage = false }) {
@@ -8,12 +9,15 @@ export default function PhotoGallery({ drinkId, photos, onUpdated, canManage = f
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
 
+  // перетаскивание миниатюр для смены порядка (только админ)
+  const [dragIdx, setDragIdx] = useState(null);
+  const [overIdx, setOverIdx] = useState(null);
+
   useEffect(() => {
     setActiveIdx((idx) => Math.min(idx, Math.max(0, photos.length - 1)));
   }, [photos.length]);
 
   const active = photos[activeIdx];
-  const canAdd = isAuthenticated();
 
   const handleSelect = async ({ file, url }) => {
     setUploading(true);
@@ -44,6 +48,23 @@ export default function PhotoGallery({ drinkId, photos, onUpdated, canManage = f
     }
   };
 
+  const handleDrop = async (toIdx) => {
+    const from = dragIdx;
+    setDragIdx(null);
+    setOverIdx(null);
+    if (from == null || from === toIdx) return;
+    const next = [...photos];
+    const [moved] = next.splice(from, 1);
+    next.splice(toIdx, 0, moved);
+    setActiveIdx(toIdx);
+    try {
+      const updated = await reorderDrinkPhotos(drinkId, next.map((p) => p.id));
+      onUpdated?.(updated);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   return (
     <div className="gallery">
       {active ? (
@@ -54,14 +75,26 @@ export default function PhotoGallery({ drinkId, photos, onUpdated, canManage = f
 
       <div className="gallery-thumbs">
         {photos.map((p, i) => (
-          <div className="gallery-thumb-wrap" key={p.id}>
+          <div
+            className={`gallery-thumb-wrap ${canManage ? "draggable" : ""} ${overIdx === i ? "drag-over" : ""}`}
+            key={p.id}
+            draggable={canManage}
+            onDragStart={canManage ? () => setDragIdx(i) : undefined}
+            onDragOver={canManage ? (e) => { e.preventDefault(); setOverIdx(i); } : undefined}
+            onDragLeave={canManage ? () => setOverIdx((v) => (v === i ? null : v)) : undefined}
+            onDrop={canManage ? (e) => { e.preventDefault(); handleDrop(i); } : undefined}
+            onDragEnd={canManage ? () => { setDragIdx(null); setOverIdx(null); } : undefined}
+          >
             <img
               className={`gallery-thumb ${i === activeIdx ? "active" : ""}`}
               src={mediaUrl(p.url)}
               alt={`Фото ${i + 1}`}
               onClick={() => setActiveIdx(i)}
               loading="lazy"
+              draggable={false}
+              style={coverStyle("contain")}
             />
+            {i === 0 && <span className="thumb-cover-badge" title="Обложка">обложка</span>}
             {canManage && (
               <button
                 className="gallery-thumb-del"
@@ -72,12 +105,16 @@ export default function PhotoGallery({ drinkId, photos, onUpdated, canManage = f
           </div>
         ))}
 
-        {canAdd && (
-          <button className="gallery-add" onClick={() => setAdding(true)} title="Добавить своё фото">
+        {canManage && (
+          <button className="gallery-add" onClick={() => setAdding(true)} title="Добавить фото">
             +
           </button>
         )}
       </div>
+
+      {canManage && photos.length > 1 && (
+        <div className="muted gallery-hint">Перетащите миниатюры, чтобы изменить порядок. Первое фото — обложка.</div>
+      )}
 
       {adding && (
         <div className="modal-overlay" onClick={() => !uploading && setAdding(false)}>
@@ -98,6 +135,8 @@ export default function PhotoGallery({ drinkId, photos, onUpdated, canManage = f
           </div>
         </div>
       )}
+
+      {error && !adding && <div className="error-text">{error}</div>}
     </div>
   );
 }

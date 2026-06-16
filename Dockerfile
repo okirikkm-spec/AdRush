@@ -23,6 +23,9 @@ RUN mvn package -DskipTests -q
 
 # Шаг 3: финальный образ
 FROM eclipse-temurin:21-jre
+# curl нужен парсеру Monster: Cloudflare режет Java-клиент, HTML тянется системным curl
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=backend-build /app/target/*.jar app.jar
 EXPOSE 8080

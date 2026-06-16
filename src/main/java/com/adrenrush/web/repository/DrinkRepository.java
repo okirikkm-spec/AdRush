@@ -9,5 +9,6 @@ import java.util.Optional;
 @Repository
 public interface DrinkRepository extends JpaRepository<Drink, Long> {
     Optional<Drink> findBySlug(String slug);
+    Optional<Drink> findBySourceUrl(String sourceUrl);
     boolean existsBySourceUrl(String sourceUrl);
 }

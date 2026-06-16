@@ -1,4 +1,5 @@
 import { mediaUrl } from "../services/api";
+import { coverStyle } from "../utils/coverStyle";
 
 const SCORES = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
 
@@ -52,13 +53,15 @@ export default function DrinkCard({ drink, rank, onClick, ratingOpen, onRatingTo
       <div className={`drink-rank ${rankClass}`}>{RANK_LABELS[rank] || rank}</div>
 
       {cover ? (
-        <img className="drink-thumb" src={cover} alt={drink.name} loading="lazy" />
+        <img className="drink-thumb" src={cover} alt={drink.name} loading="lazy"
+          style={coverStyle(drink.coverFitCard, drink.coverPosCard)} />
       ) : (
         <div className="drink-thumb drink-thumb-placeholder">⚡</div>
       )}
 
       <div className="drink-card-body">
         <div className="drink-card-name">{drink.name}</div>
+        {drink.brand && <span className="drink-card-brand">{drink.brand}</span>}
         {drink.description && <div className="drink-card-desc">{drink.description}</div>}
       </div>
 
