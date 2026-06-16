@@ -4,7 +4,7 @@ import Navbar from "../components/Navbar";
 import ImageDropZone from "../components/ImageDropZone";
 import UserModeration from "../components/UserModeration";
 import AuditLog from "../components/AuditLog";
-import { fetchMe, createDrink, fetchParseSources, runParse, addDrinkPhoto, addDrinkPhotoByUrl } from "../services/api";
+import { fetchMe, createDrink, fetchParseSources, runParse, uploadMonsterCatalog, addDrinkPhoto, addDrinkPhotoByUrl } from "../services/api";
 import { CheckIcon } from "../components/icons";
 
 export default function AdminPage() {
@@ -39,6 +39,7 @@ export default function AdminPage() {
         <div className="admin-grid">
           <AddDrinkCard onCreated={(d) => navigate(`/drink/${d.id}`)} />
           <ParserCard />
+          <MonsterCatalogCard />
           <UserModeration />
           <AuditLog />
         </div>
@@ -115,6 +116,65 @@ function ParserCard() {
         Парсинг…
       </button>
       {open && <ParseModal onClose={() => setOpen(false)} />}
+    </div>
+  );
+}
+
+function MonsterCatalogCard() {
+  const [file, setFile] = useState(null);
+  const [reparse, setReparse] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [error, setError] = useState(null);
+
+  const upload = async () => {
+    if (!file) return;
+    setMsg(null);
+    setError(null);
+    setBusy(true);
+    try {
+      const res = await uploadMonsterCatalog(file, reparse);
+      const updated = res.updated || 0;
+      setMsg(`Готово. Добавлено новых: ${res.created}` + (reparse ? ` · обновлено: ${updated}` : ""));
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="card">
+      <div className="card-title">🥤 Каталог Monster (из файла)</div>
+      <div className="badge-info" style={{ marginBottom: 14 }}>
+        Сайт Monster закрыт Cloudflare для сервера, поэтому каталог загружается вручную.
+        Открой <b>monsterenergy.com/en-us/energy-drinks/</b> в браузере, дождись карточек,
+        сохрани страницу (Ctrl+S → «Веб-страница, только HTML») и загрузи файл сюда.
+      </div>
+      <div className="input-group">
+        <label className="input-label">HTML-файл каталога</label>
+        <input
+          className="input"
+          type="file"
+          accept=".html,.htm,text/html"
+          onChange={(e) => { setFile(e.target.files?.[0] || null); setMsg(null); setError(null); }}
+        />
+      </div>
+      <div className="seg" style={{ marginBottom: 14 }}>
+        <button type="button" className={`seg-btn ${!reparse ? "on" : ""}`} onClick={() => setReparse(false)}>
+          <span className="seg-title">Только новые</span>
+          <span className="seg-sub">Добавить отсутствующие</span>
+        </button>
+        <button type="button" className={`seg-btn ${reparse ? "on" : ""}`} onClick={() => setReparse(true)}>
+          <span className="seg-title">Перепарсить всё</span>
+          <span className="seg-sub">Обновить существующие</span>
+        </button>
+      </div>
+      <button className="btn btn-primary" onClick={upload} disabled={busy || !file}>
+        {busy ? "Загрузка…" : "Загрузить и спарсить"}
+      </button>
+      {error && <div className="error-text">{error}</div>}
+      {msg && <div className="picker-result" style={{ marginTop: 10 }}>{msg}</div>}
     </div>
   );
 }

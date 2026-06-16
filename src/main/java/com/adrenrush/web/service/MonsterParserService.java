@@ -7,79 +7,61 @@ import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 /**
- * Парсер ассортимента Monster Energy с официального сайта monsterenergy.com/en-us/energy-drinks/.
- * Страница серверно рендерит карточки {@code a.product-card} (имя бренда + вкус + картинка + ссылка),
- * сгруппированные по брендам; у каждой группы есть описание {@code .brand-description}.
+ * Парсер ассортимента Monster Energy из ВРУЧНУЮ ЗАГРУЖЕННОГО HTML каталога
+ * monsterenergy.com/en-us/energy-drinks/.
  *
- * Особенности этого сайта (стоили отладки):
- * - Cloudflare отдаёт 403-челлендж, если не прислать ПОЛНЫЙ набор браузерных заголовков и
- *   браузерный TLS-фингерпринт. Java/Jsoup-клиент режется, поэтому HTML тянем через системный curl.
- * - CDN картинок (web-assests.monsterenergy.com) тротлит серверное скачивание по TLS-фингерпринту,
- *   поэтому обложки НЕ скачиваем в хранилище, а сохраняем внешние ссылки — их тянет браузер клиента.
+ * Почему из файла, а не сетевым запросом: сайт за Cloudflare Bot Management, который из
+ * дата-центра (боевой сервер) отдаёт 403-челлендж независимо от заголовков и DPI-обходов —
+ * пробивает только настоящий браузер. Поэтому администратор сохраняет страницу каталога в
+ * браузере (Ctrl+S → «только HTML») и загружает файл через админку, а парсер разбирает его.
+ *
+ * Страница серверно рендерит карточки {@code a.product-card} (имя бренда + вкус + картинка +
+ * ссылка), сгруппированные по брендам; у каждой группы есть описание {@code .brand-description}.
+ * Картинки сохраняем как внешние ссылки на CDN (web-assests.monsterenergy.com) — их грузит
+ * браузер клиента (серверное скачивание CDN тротлит по TLS-фингерпринту).
  */
 @Service
 @RequiredArgsConstructor
 public class MonsterParserService {
 
     private static final Logger log = LoggerFactory.getLogger(MonsterParserService.class);
-    private static final String USER_AGENT =
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
     /** Бренд, который проставляется всем карточкам из этого каталога. */
     public static final String BRAND = "Monster";
 
+    /** Базовый URL каталога — для разрешения относительных ссылок (href) в загруженном HTML. */
+    private static final String CATALOG_BASE_URI = "https://www.monsterenergy.com/en-us/energy-drinks/";
+
     private final DrinkService drinkService;
 
-    @Value("${parser.monster.url:https://www.monsterenergy.com/en-us/energy-drinks/}")
-    private String catalogUrl;
-
-    @Value("${parser.monster.enabled:true}")
-    private boolean enabled;
-
-    /** Ежедневный запуск по cron (по умолчанию через полчаса после парсера Adrenaline). */
-    @Scheduled(cron = "${parser.monster.cron:0 30 4 * * *}")
-    public void scheduledParse() {
-        if (!enabled) return;
-        log.info("Запланированный парсинг ассортимента monsterenergy.com");
-        parse(false);
-    }
-
     /**
-     * Обходит каталог Monster. Дедупликация — по ссылке на страницу товара (href);
-     * первое вхождение выигрывает, поэтому товар получает описание своей «домашней» секции,
-     * а не агрегирующих каруселей (Fan Favorites и т.п.).
+     * Разбирает HTML каталога Monster (сохранённый из браузера и загруженный администратором).
+     * Дедупликация — по ссылке на страницу товара (href); первое вхождение выигрывает, поэтому
+     * товар получает описание своей «домашней» секции, а не агрегирующих каруселей.
      *
+     * @param html    содержимое сохранённой страницы каталога
      * @param reparse false — заводятся только новые карточки; true — у существующих обновляются
-     *                название/описание из источника
+     *                название/описание/бренд из источника
      * @return сводка: создано/обновлено
      */
-    public DrinkService.ParseResult parse(boolean reparse) {
-        String html;
-        try {
-            html = fetch(catalogUrl);
-        } catch (Exception e) {
-            log.warn("Monster-парсер: не удалось загрузить {}: {}", catalogUrl, e.getMessage());
+    public DrinkService.ParseResult parseHtml(String html, boolean reparse) {
+        if (html == null || html.isBlank()) {
+            log.warn("Monster-парсер: загружен пустой HTML");
             return new DrinkService.ParseResult(0, 0);
         }
 
-        Document doc = Jsoup.parse(html, catalogUrl);
+        Document doc = Jsoup.parse(html, CATALOG_BASE_URI);
         Elements cards = doc.select("a.product-card[href]");
         if (cards.isEmpty()) {
-            log.warn("Monster-парсер: не найдено карточек (a.product-card). Структура сайта могла измениться "
-                + "или Cloudflare вернул челлендж.");
+            log.warn("Monster-парсер: в загруженном HTML не найдено карточек (a.product-card). "
+                + "Вероятно, сохранена страница-заглушка Cloudflare, а не сам каталог.");
             return new DrinkService.ParseResult(0, 0);
         }
 
@@ -116,35 +98,10 @@ public class MonsterParserService {
 
         if (created == 0 && updated == 0) {
             log.info("Monster-парсер: изменений не найдено");
+        } else {
+            log.info("Monster-парсер: создано {}, обновлено {}", created, updated);
         }
         return new DrinkService.ParseResult(created, updated);
-    }
-
-    /** Тянет HTML через системный curl с полным набором браузерных заголовков (иначе Cloudflare 403). */
-    private String fetch(String url) throws Exception {
-        List<String> cmd = List.of(
-            "curl", "-sS", "-L", "--compressed", "--max-time", "40",
-            "-H", "User-Agent: " + USER_AGENT,
-            "-H", "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-            "-H", "Accept-Language: en-US,en;q=0.9",
-            url
-        );
-        ProcessBuilder pb = new ProcessBuilder(cmd);
-        pb.redirectError(ProcessBuilder.Redirect.DISCARD);
-        Process p = pb.start();
-
-        byte[] body;
-        try (InputStream in = p.getInputStream()) {
-            body = in.readAllBytes();
-        }
-        if (!p.waitFor(50, TimeUnit.SECONDS)) {
-            p.destroyForcibly();
-            throw new IllegalStateException("curl превысил таймаут");
-        }
-        if (p.exitValue() != 0) {
-            throw new IllegalStateException("curl завершился с кодом " + p.exitValue());
-        }
-        return new String(body, StandardCharsets.UTF_8);
     }
 
     /** true, если ссылка ведёт на конкретный товар (бренд + вкус), а не на лендинг категории. */

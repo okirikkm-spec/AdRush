@@ -13,6 +13,8 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -112,16 +114,20 @@ public class DrinkController {
         return ResponseEntity.ok(drinkService.deletePhoto(currentUser, id, photoId));
     }
 
-    /** Список брендов, для которых есть парсер каталога — для окна парсинга в админке. */
+    /**
+     * Список брендов с автоматическим парсером каталога (сами тянут с сайта) — для окна
+     * парсинга в админке. Monster сюда НЕ входит: его сайт за Cloudflare недоступен серверу,
+     * каталог загружается вручную через {@link #parseMonster}.
+     */
     @GetMapping("/parse/sources")
     public ResponseEntity<List<String>> parseSources(@AuthenticationPrincipal User currentUser) {
         requireAdmin(currentUser);
-        return ResponseEntity.ok(List.of(ParserService.BRAND, MonsterParserService.BRAND));
+        return ResponseEntity.ok(List.of(ParserService.BRAND));
     }
 
     /**
-     * Ручной запуск парсеров для выбранных брендов — только для администратора.
-     * Тело: {@code {"brands": ["Adrenaline Rush", "Monster"], "reparse": false}}.
+     * Ручной запуск авто-парсеров для выбранных брендов — только для администратора.
+     * Тело: {@code {"brands": ["Adrenaline Rush"], "reparse": false}}.
      * reparse=false — только новые карточки; reparse=true — обновить и существующие.
      */
     @PostMapping("/parse")
@@ -142,12 +148,30 @@ public class DrinkController {
             created += r.created();
             updated += r.updated();
         }
-        if (brands.contains(MonsterParserService.BRAND)) {
-            DrinkService.ParseResult r = monsterParserService.parse(reparse);
-            created += r.created();
-            updated += r.updated();
-        }
         return ResponseEntity.ok(Map.of("created", created, "updated", updated));
+    }
+
+    /**
+     * Парсинг каталога Monster из загруженного HTML-файла — только для администратора.
+     * Сайт Monster за Cloudflare Bot Management недоступен серверу напрямую (403-челлендж),
+     * поэтому администратор сохраняет страницу каталога в браузере и загружает HTML сюда.
+     */
+    @PostMapping("/parse/monster")
+    public ResponseEntity<Map<String, Object>> parseMonster(@AuthenticationPrincipal User currentUser,
+                                                            @RequestParam("file") MultipartFile file,
+                                                            @RequestParam(value = "reparse", defaultValue = "false") boolean reparse) {
+        requireAdmin(currentUser);
+        if (file == null || file.isEmpty()) {
+            throw ApiException.badRequest("Загрузите HTML-файл каталога Monster");
+        }
+        String html;
+        try {
+            html = new String(file.getBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw ApiException.badRequest("Не удалось прочитать загруженный файл");
+        }
+        DrinkService.ParseResult r = monsterParserService.parseHtml(html, reparse);
+        return ResponseEntity.ok(Map.of("created", r.created(), "updated", r.updated()));
     }
 
     private List<String> asStringList(Object raw) {

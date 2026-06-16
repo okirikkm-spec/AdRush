@@ -152,6 +152,22 @@ export function fetchParseSources() {
 export function runParse({ brands, reparse = false }) {
   return jsonRequest(`/api/drinks/parse`, { method: "POST", body: { brands, reparse }, auth: true });
 }
+/**
+ * Загрузить сохранённый HTML каталога Monster (парсится на сервере).
+ * reparse=false — только новые карточки; true — обновить и существующие.
+ */
+export async function uploadMonsterCatalog(file, reparse = false) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("reparse", reparse);
+  const res = await fetch(`${API_BASE}/api/drinks/parse/monster`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: formData,
+  });
+  if (!res.ok) throw await parseError(res, "Ошибка загрузки каталога Monster");
+  return res.json();
+}
 export async function addDrinkPhoto(id, file) {
   const formData = new FormData();
   formData.append("file", file);
