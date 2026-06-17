@@ -334,7 +334,16 @@ textarea.input { resize: vertical; min-height: 84px; line-height: 1.5; }
 
 /* Отзывы внутри окна карточки */
 .modal-comments { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 14px; }
+.modal-review-form {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px; margin-bottom: 16px;
+}
+.modal-review-form-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 10px; flex-wrap: wrap;
+}
 .modal-comments-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.mini-review.mine { background: var(--accent-dim); border-radius: var(--radius-sm); padding: 8px; margin: 0 -2px; }
 .mini-select {
   font-size: 12.5px; padding: 5px 9px; border-radius: var(--radius-sm);
   background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
@@ -358,12 +367,26 @@ a.mini-review-name:hover { color: var(--accent); }
 .modal-desc { color: var(--text-muted); font-size: 14px; margin: 8px 0 18px; }
 .modal-actions { display: flex; gap: 10px; }
 
+/* ─── Детальная карточка-модалка (бывшая страница энергетика) ─── */
+.modal-detail { max-width: 680px; position: relative; }
+.modal-detail-body { flex: 1; min-height: 0; }
+.modal-detail .gallery { margin-bottom: 18px; }
+.modal-close-float {
+  position: absolute; top: 12px; right: 12px; z-index: 5;
+  background: rgba(0, 0, 0, 0.5); color: #fff;
+}
+.modal-close-float:hover { background: rgba(0, 0, 0, 0.72); color: #fff; }
+.modal-detail-foot {
+  display: flex; justify-content: flex-end; gap: 10px;
+  padding: 12px 22px; border-top: 1px solid var(--border); background: var(--surface);
+}
+
 /* ─────────────── Drink page ─────────────── */
 .drink-header { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
 .gallery { margin-bottom: 28px; }
 .gallery-main {
   width: 100%; aspect-ratio: 16 / 10; border-radius: var(--radius-lg);
-  object-fit: cover; background: var(--surface-2); border: 1px solid var(--border);
+  object-fit: contain; padding: 14px; background: var(--surface-2); border: 1px solid var(--border);
 }
 .gallery-main-empty {
   display: flex; align-items: center; justify-content: center;
@@ -543,6 +566,27 @@ a.mini-review-name:hover { color: var(--accent); }
 
 /* ─────────────── Admin ─────────────── */
 .admin-grid { display: grid; gap: 18px; }
+
+/* Вкладки-разделы админки */
+.admin-tabs {
+  display: flex; gap: 4px; margin-bottom: 22px;
+  border-bottom: 1px solid var(--border); overflow-x: auto;
+}
+.admin-tab {
+  display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+  padding: 11px 16px; background: none; border: none; cursor: pointer;
+  color: var(--text-muted); font-weight: 600; font-size: 14px; font-family: var(--font);
+  border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s, border-color .15s;
+}
+.admin-tab:hover { color: var(--text); }
+.admin-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* Сетка карточек внутри раздела «Каталог» */
+.admin-cards {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 18px; align-items: start;
+}
+.admin-cards .card { margin-bottom: 0; }
 .badge-info { font-size: 13px; color: var(--text-muted); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 14px; }
 
 /* ─────────────── Brand filter (главная) ─────────────── */
@@ -646,7 +690,7 @@ a.mini-review-name:hover { color: var(--accent); }
 .framer-frame.draggable { cursor: grab; }
 .framer-frame.draggable:active { cursor: grabbing; }
 .framer-card { aspect-ratio: 1 / 1; }
-.framer-modal { aspect-ratio: 16 / 9; }
+.framer-modal { aspect-ratio: 16 / 10; }
 .framer-empty {
   display: flex; align-items: center; justify-content: center; height: 100%;
   color: var(--text-faint); font-size: 28px;

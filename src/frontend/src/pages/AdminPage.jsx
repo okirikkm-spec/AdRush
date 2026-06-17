@@ -11,6 +11,7 @@ export default function AdminPage() {
   const navigate = useNavigate();
   const [me, setMe] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState("catalog");
 
   useEffect(() => {
     document.title = "Админка — AdRush";
@@ -34,15 +35,26 @@ export default function AdminPage() {
       <Navbar />
       <div className="page">
         <h1 className="page-title">Панель администратора</h1>
-        <p className="page-subtitle">Добавление энергетиков и управление каталогом</p>
+        <p className="page-subtitle">Управление каталогом, пользователями и журналом действий</p>
 
-        <div className="admin-grid">
-          <AddDrinkCard onCreated={(d) => navigate(`/drink/${d.id}`)} />
-          <ParserCard />
-          <MonsterCatalogCard />
-          <UserModeration />
-          <AuditLog />
+        <div className="admin-tabs" role="tablist">
+          <button className={`admin-tab ${tab === "catalog" ? "active" : ""}`}
+            onClick={() => setTab("catalog")}>📦 Каталог</button>
+          <button className={`admin-tab ${tab === "users" ? "active" : ""}`}
+            onClick={() => setTab("users")}>👥 Пользователи</button>
+          <button className={`admin-tab ${tab === "audit" ? "active" : ""}`}
+            onClick={() => setTab("audit")}>📋 Журнал аудита</button>
         </div>
+
+        {tab === "catalog" && (
+          <div className="admin-cards">
+            <AddDrinkCard onCreated={(d) => navigate(`/drink/${d.id}`)} />
+            <ParserCard />
+            <MonsterCatalogCard />
+          </div>
+        )}
+        {tab === "users" && <UserModeration />}
+        {tab === "audit" && <AuditLog />}
       </div>
     </>
   );

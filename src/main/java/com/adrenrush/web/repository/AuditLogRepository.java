@@ -20,10 +20,10 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
         WHERE (:actorId IS NULL OR a.actorId = :actorId)
           AND (:action IS NULL OR a.action = :action)
           AND (:targetId IS NULL OR a.targetId = :targetId)
-          AND (:q IS NULL OR (
-                LOWER(a.targetLabel)  LIKE LOWER(CONCAT('%', :q, '%'))
-             OR LOWER(a.actorUsername) LIKE LOWER(CONCAT('%', :q, '%'))
-             OR LOWER(a.details)       LIKE LOWER(CONCAT('%', :q, '%'))
+          AND (CAST(:q AS string) IS NULL OR (
+                LOWER(a.targetLabel)  LIKE LOWER(CONCAT('%', CAST(:q AS string), '%'))
+             OR LOWER(a.actorUsername) LIKE LOWER(CONCAT('%', CAST(:q AS string), '%'))
+             OR LOWER(a.details)       LIKE LOWER(CONCAT('%', CAST(:q AS string), '%'))
           ))
         ORDER BY a.createdAt DESC
         """)

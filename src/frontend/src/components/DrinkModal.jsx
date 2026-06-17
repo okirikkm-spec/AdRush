@@ -1,118 +1,167 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { mediaUrl, fetchReviews } from "../services/api";
+import { useEffect, useState, useCallback } from "react";
+import { fetchDrink, fetchMe, updateDrink, deleteDrink, isAuthenticated, mediaUrl } from "../services/api";
 import { coverStyle } from "../utils/coverStyle";
-import Avatar from "./Avatar";
+import PhotoGallery from "./PhotoGallery";
+import ReviewSection from "./ReviewSection";
+import CoverFramerModal from "./CoverFramerModal";
 
-export default function DrinkModal({ drink, onClose }) {
-  const navigate = useNavigate();
-  const cover = mediaUrl(drink.coverUrl);
+/**
+ * Карточка энергетика во всплывающем окне — заменяет отдельную страницу.
+ * Показывает галерею, описание и отзывы; для админа по кнопке «Редактировать»
+ * включается режим правки (название/описание/фото/кадрирование/удаление).
+ *
+ * @param drinkId id энергетика (модалка сама подтягивает полные данные)
+ * @param summary краткие данные из списка — для мгновенного показа шапки до загрузки
+ * @param onChanged вызывается после изменений, чтобы обновить список на главной
+ */
+export default function DrinkModal({ drinkId, summary, onClose, onChanged }) {
+  const [drink, setDrink] = useState(summary || null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [framing, setFraming] = useState(false);
 
-  const [showComments, setShowComments] = useState(false);
-  const [reviews, setReviews] = useState([]);
-  const [loaded, setLoaded] = useState(false);
-  const [sort, setSort] = useState("new");
+  const [nameDraft, setNameDraft] = useState(summary?.name || "");
+  const [descDraft, setDescDraft] = useState(summary?.description || "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
 
-  // Блокируем прокрутку основной страницы, пока открыто окно
+  // блокируем прокрутку фона + Esc для закрытия
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => { document.body.style.overflow = prev; document.removeEventListener("keydown", onKey); };
+  }, [onClose]);
+
+  const load = useCallback(async () => {
+    try {
+      const full = await fetchDrink(drinkId);
+      setDrink(full);
+      setNameDraft(full.name || "");
+      setDescDraft(full.description || "");
+    } catch (e) {
+      setError(e.message);
+    }
+  }, [drinkId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (isAuthenticated()) fetchMe().then((me) => setIsAdmin(me?.role === "ADMIN")).catch(() => {});
   }, []);
 
-  const toggleComments = () => {
-    const next = !showComments;
-    setShowComments(next);
-    if (next && !loaded) {
-      fetchReviews(drink.id)
-        .then((data) => { setReviews(data); setLoaded(true); })
-        .catch(() => setLoaded(true));
+  const applyUpdate = (updated) => { setDrink(updated); onChanged?.(); };
+
+  const saveInfo = async () => {
+    if (!nameDraft.trim()) { setError("Введите название"); return; }
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await updateDrink(drinkId, { name: nameDraft.trim(), description: descDraft });
+      applyUpdate(updated);
+      setEditing(false);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSaving(false);
     }
   };
 
-  const sortedReviews = useMemo(() => {
-    const arr = [...reviews];
-    if (sort === "high") arr.sort((a, b) => b.rating - a.rating);
-    else if (sort === "low") arr.sort((a, b) => a.rating - b.rating);
-    // "new" — порядок уже по дате с бэкенда
-    return arr;
-  }, [reviews, sort]);
+  const handleDelete = async () => {
+    if (!window.confirm(`Удалить энергетик «${drink?.name}» вместе со всеми отзывами и фото?`)) return;
+    try {
+      await deleteDrink(drinkId);
+      onChanged?.();
+      onClose();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const cover = drink ? mediaUrl(drink.coverUrl) : null;
 
   return (
     <div className="modal-overlay" onMouseDown={onClose}>
-      <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
-        {cover ? (
-          <img className="modal-image" src={cover} alt={drink.name}
-            style={coverStyle(drink.coverFitModal, drink.coverPosModal)} />
-        ) : (
-          <div className="modal-image gallery-main-empty">⚡ нет фото</div>
-        )}
+      <div className="modal modal-detail" onMouseDown={(e) => e.stopPropagation()} role="dialog">
+        <button className="modal-close modal-close-float" onClick={onClose} aria-label="Закрыть">×</button>
 
-        <div className="modal-body">
-          <div className="modal-header">
-            <h2 className="modal-title">{drink.name}</h2>
-          </div>
-
-          {drink.brand && <span className="drink-card-brand" style={{ marginBottom: 8 }}>{drink.brand}</span>}
-
-          <div className="row" style={{ marginBottom: 6 }}>
-            <span className="rating-badge" style={{ fontSize: 18 }}>
-              {drink.averageRating > 0 ? drink.averageRating.toFixed(1) : "—"}
-              <span className="max">/10</span>
-            </span>
-            <span className="muted" style={{ fontSize: 13 }}>· {drink.reviewCount} оценок</span>
-          </div>
-
-          <p className="modal-desc">
-            {drink.description || "Описание пока не добавлено."}
-          </p>
-
-          <div className="modal-actions">
-            <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => navigate(`/drink/${drink.id}`)}>
-              Подробнее
-            </button>
-            <button className={`btn ${showComments ? "btn-primary" : "btn-secondary"}`} onClick={toggleComments}>
-              💬 Отзывы{drink.reviewCount ? ` (${drink.reviewCount})` : ""}
-            </button>
-            <button className="btn btn-secondary" onClick={onClose}>Закрыть</button>
-          </div>
-
-          {showComments && (
-            <div className="modal-comments">
-              <div className="modal-comments-bar">
-                <span className="muted" style={{ fontSize: 13 }}>Отзывы пользователей</span>
-                <select className="mini-select" value={sort} onChange={(e) => setSort(e.target.value)}>
-                  <option value="new">Сначала новые</option>
-                  <option value="high">Высокая оценка</option>
-                  <option value="low">Низкая оценка</option>
-                </select>
-              </div>
-
-              {!loaded ? (
-                <div className="muted" style={{ fontSize: 13, padding: "8px 0" }}>Загрузка…</div>
-              ) : sortedReviews.length === 0 ? (
-                <div className="muted" style={{ fontSize: 13, padding: "8px 0" }}>Пока нет отзывов.</div>
+        <div className="modal-body modal-detail-body">
+          {/* Галерея: после загрузки полных данных — с миниатюрами и управлением (в режиме правки) */}
+          {drink && Array.isArray(drink.photos) ? (
+            <PhotoGallery
+              drinkId={drinkId}
+              photos={drink.photos}
+              canManage={isAdmin && editing}
+              onUpdated={applyUpdate}
+              coverFit={drink.coverFitModal}
+              coverPos={drink.coverPosModal}
+            />
+          ) : (
+            <div className="gallery">
+              {cover ? (
+                <img className="gallery-main" src={cover} alt={drink?.name || ""}
+                  style={coverStyle(drink?.coverFitModal, drink?.coverPosModal)} />
               ) : (
-                <div className="mini-review-list">
-                  {sortedReviews.map((r) => (
-                    <div className="mini-review" key={r.id}>
-                      <Link to={`/user/${r.userId}`}>
-                        <Avatar url={r.userAvatarUrl} name={r.userDisplayName} size={28} />
-                      </Link>
-                      <div className="mini-review-body">
-                        <div className="mini-review-head">
-                          <Link to={`/user/${r.userId}`} className="mini-review-name">{r.userDisplayName}</Link>
-                          <span className="review-rating">★ {r.rating}</span>
-                        </div>
-                        {r.text && <div className="mini-review-text">{r.text}</div>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <div className="gallery-main gallery-main-empty">⚡ нет фото</div>
               )}
             </div>
           )}
+
+          {/* Название */}
+          {editing ? (
+            <div className="input-group">
+              <label className="input-label">Название</label>
+              <input className="input" value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} autoFocus />
+            </div>
+          ) : (
+            <h2 className="modal-title" style={{ marginBottom: 6 }}>{drink?.name || summary?.name || "…"}</h2>
+          )}
+
+          {drink?.brand && !editing && (
+            <span className="drink-card-brand" style={{ marginBottom: 10 }}>{drink.brand}</span>
+          )}
+
+          {/* Описание */}
+          {editing ? (
+            <div className="input-group">
+              <label className="input-label">Описание</label>
+              <textarea className="input" style={{ minHeight: 90 }} value={descDraft}
+                onChange={(e) => setDescDraft(e.target.value)} placeholder="Вкус, состав, впечатления…" />
+            </div>
+          ) : (
+            drink?.description ? <p className="modal-desc">{drink.description}</p> : null
+          )}
+
+          {/* Действия режима правки (админ) */}
+          {isAdmin && editing && (
+            <div className="row" style={{ marginBottom: 14, flexWrap: "wrap" }}>
+              <button className="btn btn-primary btn-sm" onClick={saveInfo} disabled={saving}>
+                {saving ? "…" : "Сохранить изменения"}
+              </button>
+              <button className="btn btn-secondary btn-sm" onClick={() => setFraming(true)}>🖼️ Кадрирование обложки</button>
+              <button className="btn btn-danger btn-sm" onClick={handleDelete}>Удалить энергетик</button>
+            </div>
+          )}
+          {error && <div className="error-text" style={{ marginBottom: 10 }}>{error}</div>}
+
+          {/* Отзывы (полный блок: оценка, форма, список, модерация) */}
+          <ReviewSection drinkId={drinkId} />
         </div>
+
+        <div className="modal-detail-foot">
+          {isAdmin && (
+            <button className={`btn btn-sm ${editing ? "btn-primary" : "btn-secondary"}`}
+              onClick={() => { setEditing((v) => !v); setError(null); }}>
+              {editing ? "Готово" : "✏️ Редактировать"}
+            </button>
+          )}
+          <button className="btn btn-secondary btn-sm" onClick={onClose}>Закрыть</button>
+        </div>
+
+        {framing && drink && (
+          <CoverFramerModal drink={drink} onClose={() => setFraming(false)} onSaved={applyUpdate} />
+        )}
       </div>
     </div>
   );

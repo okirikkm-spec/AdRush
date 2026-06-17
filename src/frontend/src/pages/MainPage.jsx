@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import DrinkCard from "../components/DrinkCard";
 import DrinkModal from "../components/DrinkModal";
@@ -6,22 +7,35 @@ import BrandFilter from "../components/BrandFilter";
 import { fetchDrinks } from "../services/api";
 
 export default function MainPage() {
+  const { id } = useParams();           // deep-link /drink/:id открывает модалку
+  const navigate = useNavigate();
   const [drinks, setDrinks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selected, setSelected] = useState(null);
+  // id энергетика, для которого открыта модалка (по клику на карточку или из URL)
+  const [openId, setOpenId] = useState(null);
   // id энергетика, у которого открыт попап с распределением оценок (одновременно — только один)
   const [openRatingId, setOpenRatingId] = useState(null);
   // null = фильтр не задан (показываем все); Set = показывать только эти бренды
   const [brandFilter, setBrandFilter] = useState(null);
 
+  const loadDrinks = useCallback(
+    () => fetchDrinks().then((data) => setDrinks(data)).catch((e) => setError(e.message)),
+    []
+  );
+
   useEffect(() => {
     document.title = "AdRush — рейтинг энергетиков";
-    fetchDrinks()
-      .then((data) => setDrinks(data))
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, []);
+    loadDrinks().finally(() => setLoading(false));
+  }, [loadDrinks]);
+
+  // открыть модалку по deep-link /drink/:id
+  useEffect(() => { setOpenId(id ? Number(id) : null); }, [id]);
+
+  const closeModal = () => {
+    setOpenId(null);
+    if (id) navigate("/", { replace: true });
+  };
 
   // уникальные бренды для фильтра (по алфавиту)
   const brands = useMemo(
@@ -76,16 +90,23 @@ export default function MainPage() {
               key={drink.id}
               drink={drink}
               rank={rank}
-              onClick={() => { setOpenRatingId(null); setSelected(drink); }}
+              onClick={() => { setOpenRatingId(null); setOpenId(drink.id); }}
               ratingOpen={openRatingId === drink.id}
-              onRatingToggle={() => setOpenRatingId((id) => (id === drink.id ? null : drink.id))}
+              onRatingToggle={() => setOpenRatingId((rid) => (rid === drink.id ? null : drink.id))}
               onRatingHover={(show) => setOpenRatingId(show ? drink.id : null)}
             />
           ))}
         </div>
       </div>
 
-      {selected && <DrinkModal drink={selected} onClose={() => setSelected(null)} />}
+      {openId != null && (
+        <DrinkModal
+          drinkId={openId}
+          summary={drinks.find((d) => d.id === openId) || null}
+          onClose={closeModal}
+          onChanged={loadDrinks}
+        />
+      )}
     </>
   );
 }

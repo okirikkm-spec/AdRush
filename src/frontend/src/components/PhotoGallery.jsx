@@ -3,7 +3,7 @@ import { mediaUrl, addDrinkPhoto, addDrinkPhotoByUrl, deleteDrinkPhoto, reorderD
 import { coverStyle } from "../utils/coverStyle";
 import ImageDropZone from "./ImageDropZone";
 
-export default function PhotoGallery({ drinkId, photos, onUpdated, canManage = false }) {
+export default function PhotoGallery({ drinkId, photos, onUpdated, canManage = false, coverFit, coverPos }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const [adding, setAdding] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -68,7 +68,10 @@ export default function PhotoGallery({ drinkId, photos, onUpdated, canManage = f
   return (
     <div className="gallery">
       {active ? (
-        <img className="gallery-main" src={mediaUrl(active.url)} alt="Фото энергетика" />
+        // Кадрирование «Окно с информацией» применяем к обложке (первое фото);
+        // остальные фото показываем целиком (contain по CSS).
+        <img className="gallery-main" src={mediaUrl(active.url)} alt="Фото энергетика"
+          style={activeIdx === 0 ? coverStyle(coverFit, coverPos) : undefined} />
       ) : (
         <div className="gallery-main gallery-main-empty">⚡ Фотографий пока нет</div>
       )}

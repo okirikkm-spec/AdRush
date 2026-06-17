@@ -2,7 +2,6 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "./ThemeContext";
 import PrivateRoute from "./components/PrivateRoute";
 import MainPage from "./pages/MainPage";
-import DrinkPage from "./pages/DrinkPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import RecoverPage from "./pages/RecoverPage";
@@ -18,7 +17,8 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<MainPage />} />
-          <Route path="/drink/:id" element={<DrinkPage />} />
+          {/* «Страница энергетика» теперь открывается модалкой поверх главной (deep-link сохранён) */}
+          <Route path="/drink/:id" element={<MainPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/recover" element={<RecoverPage />} />
