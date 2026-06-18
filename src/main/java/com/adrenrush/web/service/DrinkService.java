@@ -340,7 +340,8 @@ public class DrinkService {
                 String key = storageKeyOf(url);
                 byte[] data = storageService.readBytes(url);
                 if (key == null || data == null) return PhotoOutcome.SKIPPED;
-                String ct = url.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg";
+                String ct = firstNonNull(sniffImageContentType(data),
+                    firstNonNull(contentTypeFromUrl(url), "image/jpeg"));
                 String thumbUrl = generateAndStoreThumb(key, data, ct);
                 if (thumbUrl == null) return PhotoOutcome.SKIPPED;
                 photo.setThumbUrl(thumbUrl);
@@ -391,6 +392,9 @@ public class DrinkService {
         }
 
         addPhoto(drink, stored.url(), stored.thumbUrl(), PhotoSource.USER, uploader);
+        log.info("Загрузка фото (файл): энергетик #{} «{}», пользователь «{}», «{}» ({} КБ, {}) → {}",
+            drinkId, drink.getName(), uploader.getUsername(), file.getOriginalFilename(),
+            data.length / 1024, contentType, stored.url());
         return getById(drinkId);
     }
 
@@ -409,6 +413,8 @@ public class DrinkService {
             throw ApiException.badRequest("Не удалось загрузить изображение по ссылке");
         }
         addPhoto(drink, stored.url(), stored.thumbUrl(), PhotoSource.USER, uploader);
+        log.info("Загрузка фото (по ссылке): энергетик #{} «{}», пользователь «{}», {} → {}",
+            drinkId, drink.getName(), uploader.getUsername(), url.trim(), stored.url());
         return getById(drinkId);
     }
 
@@ -438,15 +444,23 @@ public class DrinkService {
             .maxBodySize(25 * 1024 * 1024)
             .execute();
 
-        String contentType = resp.contentType();
-        if (contentType != null) contentType = contentType.split(";")[0].trim();
+        byte[] data = resp.bodyAsBytes();
+
+        // Content-Type бывает «кривым»: некоторые CDN (например web-assests.monsterenergy.com)
+        // отдают картинки как application/octet-stream. Поэтому если заголовок не image/* —
+        // определяем тип по сигнатуре первых байтов, затем по расширению URL.
+        String declared = resp.contentType();
+        if (declared != null) declared = declared.split(";")[0].trim();
+        String contentType = (declared != null && declared.startsWith("image/"))
+            ? declared
+            : firstNonNull(sniffImageContentType(data), contentTypeFromUrl(url));
         if (contentType == null || !contentType.startsWith("image/")) {
             throw new IllegalArgumentException("Ссылка не ведёт на изображение");
         }
 
         String key = prefix + "/" + System.currentTimeMillis() + "-"
             + Integer.toHexString(url.hashCode()) + "." + imageExt(contentType);
-        return storeImage(key, resp.bodyAsBytes(), contentType);
+        return storeImage(key, data, contentType);
     }
 
     /** Сохраняет оригинал по ключу и рядом — превью (если формат поддержан). */
@@ -494,8 +508,41 @@ public class DrinkService {
             case "image/webp" -> "webp";
             case "image/gif" -> "gif";
             case "image/svg+xml" -> "svg";
+            case "image/bmp" -> "bmp";
             default -> "jpg";
         };
+    }
+
+    /** Тип изображения по сигнатуре первых байтов (magic numbers); null — не похоже на изображение. */
+    private String sniffImageContentType(byte[] d) {
+        if (d == null || d.length < 12) return null;
+        if ((d[0] & 0xFF) == 0x89 && d[1] == 'P' && d[2] == 'N' && d[3] == 'G') return "image/png";
+        if ((d[0] & 0xFF) == 0xFF && (d[1] & 0xFF) == 0xD8 && (d[2] & 0xFF) == 0xFF) return "image/jpeg";
+        if (d[0] == 'G' && d[1] == 'I' && d[2] == 'F' && d[3] == '8') return "image/gif";
+        if (d[0] == 'R' && d[1] == 'I' && d[2] == 'F' && d[3] == 'F'
+            && d[8] == 'W' && d[9] == 'E' && d[10] == 'B' && d[11] == 'P') return "image/webp";
+        if (d[0] == 'B' && d[1] == 'M') return "image/bmp";
+        String head = new String(d, 0, Math.min(d.length, 256),
+            java.nio.charset.StandardCharsets.US_ASCII).toLowerCase();
+        if (head.contains("<svg")) return "image/svg+xml";
+        return null;
+    }
+
+    /** Тип изображения по расширению в URL (запасной вариант, если сигнатура не распознана). */
+    private String contentTypeFromUrl(String url) {
+        if (url == null) return null;
+        String u = url.toLowerCase().replaceAll("[?#].*$", "");
+        if (u.endsWith(".png")) return "image/png";
+        if (u.endsWith(".jpg") || u.endsWith(".jpeg")) return "image/jpeg";
+        if (u.endsWith(".webp")) return "image/webp";
+        if (u.endsWith(".gif")) return "image/gif";
+        if (u.endsWith(".svg")) return "image/svg+xml";
+        if (u.endsWith(".bmp")) return "image/bmp";
+        return null;
+    }
+
+    private String firstNonNull(String a, String b) {
+        return a != null ? a : b;
     }
 
     private void addPhoto(Drink drink, String url, String thumbUrl, PhotoSource source, User uploader) {
