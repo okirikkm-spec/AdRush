@@ -153,6 +153,13 @@ export function runParse({ brands, reparse = false }) {
   return jsonRequest(`/api/drinks/parse`, { method: "POST", body: { brands, reparse }, auth: true });
 }
 /**
+ * Оптимизация медиа: скачать внешние картинки в наше хранилище и достроить недостающие превью.
+ * Возвращает { downloaded, thumbnailed, skipped, failed }.
+ */
+export function optimizeMedia() {
+  return jsonRequest(`/api/drinks/media/optimize`, { method: "POST", auth: true });
+}
+/**
  * Загрузить сохранённый HTML каталога Monster (парсится на сервере).
  * reparse=false — только новые карточки; true — обновить и существующие.
  */

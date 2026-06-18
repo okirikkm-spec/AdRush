@@ -85,6 +85,13 @@
 			<version>1.18.3</version>
 		</dependency>
 
+		<!-- Thumbnailator — генерация уменьшенных превью изображений (для карточек/галерей) -->
+		<dependency>
+			<groupId>net.coobird</groupId>
+			<artifactId>thumbnailator</artifactId>
+			<version>0.4.20</version>
+		</dependency>
+
 		<!-- ZXing — генерация QR-кода для привязки 2FA-аутентификатора -->
 		<dependency>
 			<groupId>com.google.zxing</groupId>

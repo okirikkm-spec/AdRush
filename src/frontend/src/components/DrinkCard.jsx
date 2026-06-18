@@ -53,7 +53,7 @@ export default function DrinkCard({ drink, rank, onClick, ratingOpen, onRatingTo
       <div className={`drink-rank ${rankClass}`}>{RANK_LABELS[rank] || rank}</div>
 
       {cover ? (
-        <img className="drink-thumb" src={cover} alt={drink.name} loading="lazy"
+        <img className="drink-thumb" src={cover} alt={drink.name} loading="lazy" decoding="async"
           style={coverStyle(drink.coverFitCard, drink.coverPosCard)} />
       ) : (
         <div className="drink-thumb drink-thumb-placeholder">⚡</div>

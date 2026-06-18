@@ -90,6 +90,30 @@ public class StorageService {
         );
     }
 
+    /**
+     * Читает байты уже сохранённого файла по его публичному пути (/media/... или /uploads/...).
+     * Внешние http(s)-ссылки не читает. Возвращает null, если файла нет или путь не наш.
+     */
+    public byte[] readBytes(String urlPath) {
+        if (urlPath == null || urlPath.isBlank()) return null;
+        try {
+            if (urlPath.startsWith("/media/")) {
+                if (!isMinioActive()) return null;
+                try (InputStream in = getObject(urlPath.substring("/media/".length()))) {
+                    return in.readAllBytes();
+                }
+            }
+            if (urlPath.startsWith("/uploads/")) {
+                Path p = Paths.get("uploads").resolve(urlPath.substring("/uploads/".length()));
+                return Files.exists(p) ? Files.readAllBytes(p) : null;
+            }
+            return null; // внешняя ссылка — читать нечего
+        } catch (Exception e) {
+            log.warn("Не удалось прочитать файл {}: {}", urlPath, e.getMessage());
+            return null;
+        }
+    }
+
     /** Удаляет файл по его публичному пути (/media/... или /uploads/...). Внешние ссылки игнорирует. */
     public void delete(String urlPath) {
         if (urlPath == null || urlPath.isBlank()) return;

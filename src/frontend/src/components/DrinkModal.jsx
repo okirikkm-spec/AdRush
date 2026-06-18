@@ -100,7 +100,7 @@ export default function DrinkModal({ drinkId, summary, onClose, onChanged }) {
           ) : (
             <div className="gallery">
               {cover ? (
-                <img className="gallery-main" src={cover} alt={drink?.name || ""}
+                <img className="gallery-main" src={cover} alt={drink?.name || ""} decoding="async"
                   style={coverStyle(drink?.coverFitModal, drink?.coverPosModal)} />
               ) : (
                 <div className="gallery-main gallery-main-empty">⚡ нет фото</div>

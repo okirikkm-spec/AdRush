@@ -10,6 +10,10 @@ export default function Avatar({ url, name, size = 40 }) {
         className="avatar"
         src={src}
         alt={name || "avatar"}
+        width={size}
+        height={size}
+        loading="lazy"
+        decoding="async"
         style={{ width: size, height: size }}
       />
     );

@@ -4,7 +4,7 @@ import Navbar from "../components/Navbar";
 import ImageDropZone from "../components/ImageDropZone";
 import UserModeration from "../components/UserModeration";
 import AuditLog from "../components/AuditLog";
-import { fetchMe, createDrink, fetchParseSources, runParse, uploadMonsterCatalog, addDrinkPhoto, addDrinkPhotoByUrl } from "../services/api";
+import { fetchMe, createDrink, fetchParseSources, runParse, uploadMonsterCatalog, addDrinkPhoto, addDrinkPhotoByUrl, optimizeMedia } from "../services/api";
 import { CheckIcon } from "../components/icons";
 
 export default function AdminPage() {
@@ -51,6 +51,7 @@ export default function AdminPage() {
             <AddDrinkCard onCreated={(d) => navigate(`/drink/${d.id}`)} />
             <ParserCard />
             <MonsterCatalogCard />
+            <MediaOptimizeCard />
           </div>
         )}
         {tab === "users" && <UserModeration />}
@@ -184,6 +185,43 @@ function MonsterCatalogCard() {
       </div>
       <button className="btn btn-primary" onClick={upload} disabled={busy || !file}>
         {busy ? "Загрузка…" : "Загрузить и спарсить"}
+      </button>
+      {error && <div className="error-text">{error}</div>}
+      {msg && <div className="picker-result" style={{ marginTop: 10 }}>{msg}</div>}
+    </div>
+  );
+}
+
+function MediaOptimizeCard() {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [error, setError] = useState(null);
+
+  const run = async () => {
+    setMsg(null);
+    setError(null);
+    setBusy(true);
+    try {
+      const r = await optimizeMedia();
+      setMsg(`Готово. Скачано: ${r.downloaded} · превью: ${r.thumbnailed} · `
+        + `пропущено: ${r.skipped} · ошибок: ${r.failed}`);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="card">
+      <div className="card-title">🖼️ Оптимизация изображений</div>
+      <div className="badge-info" style={{ marginBottom: 14 }}>
+        Скачивает внешние картинки (Monster и т.п.) в наше хранилище и создаёт лёгкие превью —
+        карточки на главной грузятся быстрее. Внешние ссылки за Cloudflare/CDN могут не скачаться
+        с боевого сервера (попадут в «ошибки») — тогда запускайте там, где сайт-источник доступен.
+      </div>
+      <button className="btn btn-primary" onClick={run} disabled={busy}>
+        {busy ? "Обработка…" : "Оптимизировать медиа"}
       </button>
       {error && <div className="error-text">{error}</div>}
       {msg && <div className="picker-result" style={{ marginTop: 10 }}>{msg}</div>}

@@ -26,6 +26,13 @@ public class DrinkPhoto {
     @Column(nullable = false, length = 1024)
     private String url;
 
+    /**
+     * URL уменьшенного превью (для карточек/миниатюр). null — превью нет
+     * (старые записи, внешние ссылки или неподдерживаемый формат) → используем {@link #url}.
+     */
+    @Column(length = 1024)
+    private String thumbUrl;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private PhotoSource source = PhotoSource.USER;

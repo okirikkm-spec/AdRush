@@ -115,6 +115,16 @@ public class DrinkController {
     }
 
     /**
+     * Оптимизация медиа (админ): внешние картинки скачиваются в наше хранилище, для фото без
+     * превью оно достраивается. Сетевые загрузки могут занять время — ответ приходит по завершении.
+     */
+    @PostMapping("/media/optimize")
+    public ResponseEntity<DrinkService.MediaOptimizeResult> optimizeMedia(@AuthenticationPrincipal User currentUser) {
+        requireAdmin(currentUser);
+        return ResponseEntity.ok(drinkService.optimizeMedia(currentUser));
+    }
+
+    /**
      * Список брендов с автоматическим парсером каталога (сами тянут с сайта) — для окна
      * парсинга в админке. Monster сюда НЕ входит: его сайт за Cloudflare недоступен серверу,
      * каталог загружается вручную через {@link #parseMonster}.

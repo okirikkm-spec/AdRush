@@ -70,7 +70,7 @@ export default function PhotoGallery({ drinkId, photos, onUpdated, canManage = f
       {active ? (
         // Кадрирование «Окно с информацией» применяем к обложке (первое фото);
         // остальные фото показываем целиком (contain по CSS).
-        <img className="gallery-main" src={mediaUrl(active.url)} alt="Фото энергетика"
+        <img className="gallery-main" src={mediaUrl(active.url)} alt="Фото энергетика" decoding="async"
           style={activeIdx === 0 ? coverStyle(coverFit, coverPos) : undefined} />
       ) : (
         <div className="gallery-main gallery-main-empty">⚡ Фотографий пока нет</div>
@@ -90,10 +90,11 @@ export default function PhotoGallery({ drinkId, photos, onUpdated, canManage = f
           >
             <img
               className={`gallery-thumb ${i === activeIdx ? "active" : ""}`}
-              src={mediaUrl(p.url)}
+              src={mediaUrl(p.thumbUrl || p.url)}
               alt={`Фото ${i + 1}`}
               onClick={() => setActiveIdx(i)}
               loading="lazy"
+              decoding="async"
               draggable={false}
               style={coverStyle("contain")}
             />

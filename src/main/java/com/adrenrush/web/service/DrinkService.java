@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -30,6 +31,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -41,6 +43,7 @@ public class DrinkService {
     private final DrinkPhotoRepository photoRepository;
     private final ReviewRepository reviewRepository;
     private final StorageService storageService;
+    private final ImageService imageService;
     private final AuditService auditService;
 
     /** Список всех энергетиков, отсортированный по средней оценке (по убыванию). */
@@ -116,7 +119,7 @@ public class DrinkService {
             if (downloadCover) {
                 addRemotePhoto(drink, coverUrl.trim(), PhotoSource.PARSED, null);
             } else {
-                addPhoto(drink, coverUrl.trim(), PhotoSource.PARSED, null);
+                addPhoto(drink, coverUrl.trim(), null, PhotoSource.PARSED, null);
             }
         }
         return ParseOutcome.CREATED;
@@ -287,6 +290,70 @@ public class DrinkService {
         return getById(drinkId);
     }
 
+    /** Сводка прохода оптимизации медиа. */
+    public record MediaOptimizeResult(int downloaded, int thumbnailed, int skipped, int failed) {}
+
+    private enum PhotoOutcome { DOWNLOADED, THUMBNAILED, SKIPPED, FAILED }
+
+    /**
+     * Разовая оптимизация медиа (админ-операция):
+     *  1) внешние картинки (Monster CDN и т.п.) скачиваются в наше хранилище — грузятся быстрее и не зависят от CDN;
+     *  2) для уже сохранённых фото без превью оно достраивается.
+     * Внимание: на боевом сервере скачивание Monster может упираться в Cloudflare/CDN-троттлинг —
+     * такие фото останутся внешними ссылками (попадут в «ошибки»), запускать лучше там, где CDN доступен.
+     */
+    public MediaOptimizeResult optimizeMedia(User actor) {
+        int downloaded = 0, thumbnailed = 0, skipped = 0, failed = 0;
+        for (Long id : photoRepository.findAllIds()) {
+            switch (optimizePhoto(id)) {
+                case DOWNLOADED -> downloaded++;
+                case THUMBNAILED -> thumbnailed++;
+                case SKIPPED -> skipped++;
+                case FAILED -> failed++;
+            }
+        }
+        auditService.record(actor, AuditAction.DRINK_UPDATE, AuditTargetType.DRINK, null, "Медиа",
+            "Оптимизация медиа: скачано " + downloaded + ", превью " + thumbnailed
+                + ", пропущено " + skipped + ", ошибок " + failed);
+        return new MediaOptimizeResult(downloaded, thumbnailed, skipped, failed);
+    }
+
+    /**
+     * Обрабатывает одно фото. Не {@code @Transactional}: сетевые загрузки идут вне транзакции,
+     * каждое {@code save}/{@code find} оборачивается своей короткой транзакцией Spring Data.
+     */
+    private PhotoOutcome optimizePhoto(Long photoId) {
+        DrinkPhoto photo = photoRepository.findById(photoId).orElse(null);
+        if (photo == null) return PhotoOutcome.SKIPPED;
+        String url = photo.getUrl();
+        boolean external = url != null && (url.startsWith("http://") || url.startsWith("https://"));
+        try {
+            if (external) {
+                Long drinkId = photoRepository.findDrinkIdById(photoId);
+                StoredImage stored = fetchAndStore("photos/" + drinkId, url);
+                photo.setUrl(stored.url());
+                photo.setThumbUrl(stored.thumbUrl());
+                photoRepository.save(photo);
+                return PhotoOutcome.DOWNLOADED;
+            }
+            if (photo.getThumbUrl() == null) {
+                String key = storageKeyOf(url);
+                byte[] data = storageService.readBytes(url);
+                if (key == null || data == null) return PhotoOutcome.SKIPPED;
+                String ct = url.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg";
+                String thumbUrl = generateAndStoreThumb(key, data, ct);
+                if (thumbUrl == null) return PhotoOutcome.SKIPPED;
+                photo.setThumbUrl(thumbUrl);
+                photoRepository.save(photo);
+                return PhotoOutcome.THUMBNAILED;
+            }
+            return PhotoOutcome.SKIPPED;
+        } catch (Exception e) {
+            log.warn("optimizeMedia: фото {} ({}) — {}", photoId, url, e.getMessage());
+            return PhotoOutcome.FAILED;
+        }
+    }
+
     private String describeDescChange(String oldDesc, String newDesc) {
         boolean oldEmpty = oldDesc == null || oldDesc.isBlank();
         boolean newEmpty = newDesc == null || newDesc.isBlank();
@@ -295,7 +362,7 @@ public class DrinkService {
         return "описание изменено";
     }
 
-    /** Добавляет пользовательское фото в конец галереи. */
+    /** Добавляет пользовательское фото в конец галереи (с генерацией превью). */
     @Transactional
     public DrinkResponseDto addUserPhoto(Long drinkId, MultipartFile file, User uploader) {
         Drink drink = drinkRepository.findById(drinkId)
@@ -308,19 +375,26 @@ public class DrinkService {
         String ext = contentType.substring(contentType.indexOf('/') + 1).replaceAll("[^a-zA-Z0-9]", "");
         if (ext.isBlank()) ext = "jpg";
 
-        String key = "photos/" + drinkId + "/" + System.currentTimeMillis() + "." + ext;
-        String url;
+        byte[] data;
         try {
-            url = storageService.store(key, file.getInputStream(), contentType);
+            data = file.getBytes();
+        } catch (IOException e) {
+            throw ApiException.badRequest("Не удалось прочитать загруженный файл");
+        }
+
+        String key = "photos/" + drinkId + "/" + System.currentTimeMillis() + "." + ext;
+        StoredImage stored;
+        try {
+            stored = storeImage(key, data, contentType);
         } catch (Exception e) {
             throw new ApiException(HttpStatus.INSUFFICIENT_STORAGE, "Не удалось сохранить изображение");
         }
 
-        addPhoto(drink, url, PhotoSource.USER, uploader);
+        addPhoto(drink, stored.url(), stored.thumbUrl(), PhotoSource.USER, uploader);
         return getById(drinkId);
     }
 
-    /** Добавляет пользовательское фото по ссылке: скачивает картинку в наше хранилище. */
+    /** Добавляет пользовательское фото по ссылке: скачивает картинку в наше хранилище (с превью). */
     @Transactional
     public DrinkResponseDto addUserPhotoByUrl(Long drinkId, String url, User uploader) {
         Drink drink = drinkRepository.findById(drinkId)
@@ -328,33 +402,38 @@ public class DrinkService {
         if (url == null || url.isBlank()) {
             throw ApiException.badRequest("Укажите ссылку на изображение");
         }
-        String stored;
+        StoredImage stored;
         try {
             stored = fetchAndStore("photos/" + drinkId, url.trim());
         } catch (Exception e) {
             throw ApiException.badRequest("Не удалось загрузить изображение по ссылке");
         }
-        addPhoto(drink, stored, PhotoSource.USER, uploader);
+        addPhoto(drink, stored.url(), stored.thumbUrl(), PhotoSource.USER, uploader);
         return getById(drinkId);
     }
 
-    /** Скачивает изображение по ссылке в хранилище; при сбое — оставляет внешнюю ссылку. */
+    /** Скачивает изображение по ссылке в хранилище (с превью); при сбое — оставляет внешнюю ссылку. */
     private void addRemotePhoto(Drink drink, String url, PhotoSource source, User uploader) {
-        String stored;
         try {
-            stored = fetchAndStore("photos/" + drink.getId(), url);
+            StoredImage stored = fetchAndStore("photos/" + drink.getId(), url);
+            addPhoto(drink, stored.url(), stored.thumbUrl(), source, uploader);
         } catch (Exception e) {
             log.warn("Не удалось скачать изображение {} ({}) — сохраняю внешнюю ссылку", url, e.getMessage());
-            stored = url;
+            addPhoto(drink, url, null, source, uploader);
         }
-        addPhoto(drink, stored, source, uploader);
     }
 
-    /** Загружает картинку по URL и кладёт в хранилище (MinIO или локальную папку). Возвращает публичный путь. */
-    private String fetchAndStore(String prefix, String url) throws Exception {
+    /** Оригинал + (если получилось) превью, сохранённые в хранилище. */
+    private record StoredImage(String url, String thumbUrl) {}
+
+    /** Загружает картинку по URL и кладёт в хранилище (оригинал + превью). */
+    private StoredImage fetchAndStore(String prefix, String url) throws Exception {
         Connection.Response resp = Jsoup.connect(url)
             .ignoreContentType(true)
-            .userAgent("Mozilla/5.0 (compatible; AdrenRushBot)")
+            // максимально «браузерный» UA — некоторые CDN режут запросы по нестандартному агенту
+            .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                + "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+            .header("Accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8")
             .timeout(20000)
             .maxBodySize(25 * 1024 * 1024)
             .execute();
@@ -367,9 +446,46 @@ public class DrinkService {
 
         String key = prefix + "/" + System.currentTimeMillis() + "-"
             + Integer.toHexString(url.hashCode()) + "." + imageExt(contentType);
-        try (ByteArrayInputStream in = new ByteArrayInputStream(resp.bodyAsBytes())) {
-            return storageService.store(key, in, contentType);
+        return storeImage(key, resp.bodyAsBytes(), contentType);
+    }
+
+    /** Сохраняет оригинал по ключу и рядом — превью (если формат поддержан). */
+    private StoredImage storeImage(String baseKey, byte[] data, String contentType) throws Exception {
+        String url;
+        try (ByteArrayInputStream in = new ByteArrayInputStream(data)) {
+            url = storageService.store(baseKey, in, contentType);
         }
+        return new StoredImage(url, generateAndStoreThumb(baseKey, data, contentType));
+    }
+
+    /** Делает превью из байтов и кладёт рядом с оригиналом; null — если формат не поддержан/нет выигрыша. */
+    private String generateAndStoreThumb(String baseKey, byte[] data, String contentType) {
+        boolean png = contentType != null && contentType.toLowerCase().contains("png");
+        String format = png ? "png" : "jpg";
+        String thumbContentType = png ? "image/png" : "image/jpeg";
+        Optional<byte[]> thumb = imageService.makeThumbnail(data, format);
+        if (thumb.isEmpty()) return null;
+        try (ByteArrayInputStream in = new ByteArrayInputStream(thumb.get())) {
+            return storageService.store(thumbKey(baseKey, format), in, thumbContentType);
+        } catch (Exception e) {
+            log.warn("Не удалось сохранить превью для {}: {}", baseKey, e.getMessage());
+            return null;
+        }
+    }
+
+    /** Ключ превью рядом с оригиналом: "photos/12/123.jpg" → "photos/12/123-thumb.jpg". */
+    private String thumbKey(String baseKey, String ext) {
+        int dot = baseKey.lastIndexOf('.');
+        String stem = (dot >= 0) ? baseKey.substring(0, dot) : baseKey;
+        return stem + "-thumb." + ext;
+    }
+
+    /** Относительный ключ хранилища из публичного пути (/uploads/x, /media/x → x); null для внешних ссылок. */
+    private String storageKeyOf(String urlPath) {
+        if (urlPath == null) return null;
+        if (urlPath.startsWith("/uploads/")) return urlPath.substring("/uploads/".length());
+        if (urlPath.startsWith("/media/")) return urlPath.substring("/media/".length());
+        return null;
     }
 
     private String imageExt(String contentType) {
@@ -382,11 +498,12 @@ public class DrinkService {
         };
     }
 
-    private void addPhoto(Drink drink, String url, PhotoSource source, User uploader) {
+    private void addPhoto(Drink drink, String url, String thumbUrl, PhotoSource source, User uploader) {
         int nextPos = photoRepository.countByDrinkId(drink.getId());
         DrinkPhoto photo = new DrinkPhoto();
         photo.setDrink(drink);
         photo.setUrl(url);
+        photo.setThumbUrl(thumbUrl);
         photo.setSource(source);
         photo.setUploadedBy(uploader);
         photo.setPosition(nextPos);
@@ -397,7 +514,10 @@ public class DrinkService {
         double avg = avg(drink.getId());
         int count = count(drink.getId());
         List<DrinkPhoto> photos = photoRepository.findByDrinkIdOrderByPositionAscIdAsc(drink.getId());
-        String cover = photos.isEmpty() ? null : photos.get(0).getUrl();
+        // в списке достаточно лёгкого превью обложки (если оно есть)
+        DrinkPhoto first = photos.isEmpty() ? null : photos.get(0);
+        String cover = first == null ? null
+            : (first.getThumbUrl() != null ? first.getThumbUrl() : first.getUrl());
         return DrinkResponseDto.summary(drink, avg, count, distribution(drink.getId()), cover);
     }
 

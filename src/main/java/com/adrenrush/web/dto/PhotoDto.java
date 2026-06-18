@@ -7,6 +7,7 @@ import lombok.Data;
 public class PhotoDto {
     private Long id;
     private String url;
+    private String thumbUrl;
     private String source;
     private Long uploadedById;
 
@@ -14,6 +15,7 @@ public class PhotoDto {
         PhotoDto dto = new PhotoDto();
         dto.setId(photo.getId());
         dto.setUrl(photo.getUrl());
+        dto.setThumbUrl(photo.getThumbUrl());
         dto.setSource(photo.getSource().name());
         dto.setUploadedById(photo.getUploadedBy() != null ? photo.getUploadedBy().getId() : null);
         return dto;
