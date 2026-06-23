@@ -7,6 +7,7 @@ import com.adrenrush.web.exception.ApiException;
 import com.adrenrush.web.service.DrinkService;
 import com.adrenrush.web.service.MonsterParserService;
 import com.adrenrush.web.service.ParserService;
+import com.adrenrush.web.service.RedBullParserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -26,6 +27,7 @@ public class DrinkController {
 
     private final DrinkService drinkService;
     private final ParserService parserService;
+    private final RedBullParserService redBullParserService;
     private final MonsterParserService monsterParserService;
 
     /** Все энергетики в порядке убывания оценки (для главной). */
@@ -132,7 +134,7 @@ public class DrinkController {
     @GetMapping("/parse/sources")
     public ResponseEntity<List<String>> parseSources(@AuthenticationPrincipal User currentUser) {
         requireAdmin(currentUser);
-        return ResponseEntity.ok(List.of(ParserService.BRAND));
+        return ResponseEntity.ok(List.of(ParserService.BRAND, RedBullParserService.BRAND));
     }
 
     /**
@@ -155,6 +157,11 @@ public class DrinkController {
         int updated = 0;
         if (brands.contains(ParserService.BRAND)) {
             DrinkService.ParseResult r = parserService.parse(reparse);
+            created += r.created();
+            updated += r.updated();
+        }
+        if (brands.contains(RedBullParserService.BRAND)) {
+            DrinkService.ParseResult r = redBullParserService.parse(reparse);
             created += r.created();
             updated += r.updated();
         }

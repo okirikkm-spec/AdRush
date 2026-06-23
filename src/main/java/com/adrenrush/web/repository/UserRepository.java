@@ -2,6 +2,7 @@ package com.adrenrush.web.repository;
 
 import com.adrenrush.web.entity.User;
 import com.adrenrush.web.enums.RoleEnum;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -18,6 +19,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByRole(RoleEnum role);
 
     List<User> findAllByOrderByIdAsc();
+
+    /** Поиск пользователей для начала чата (по логину или отображаемому имени). */
+    List<User> findByUsernameContainingIgnoreCaseOrDisplayNameContainingIgnoreCase(
+        String username, String displayName, Pageable pageable);
 
     /**
      * Аккаунты, пересекающиеся с переданными IP или отпечатками устройства (кроме самого пользователя).

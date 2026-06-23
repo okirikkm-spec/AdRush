@@ -33,6 +33,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/auth/**").permitAll()
+                // WebSocket-хендшейк: авторизация выполняется в STOMP CONNECT-интерсепторе
+                .requestMatchers("/ws/**").permitAll()
                 .requestMatchers("/uploads/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/media/**").permitAll()
                 // Каталог энергетиков и отзывы доступны для чтения без входа
@@ -42,7 +44,8 @@ public class SecurityConfig {
                 .requestMatchers("/", "/index.html", "/static/**", "/assets/**",
                     "/*.js", "/*.css", "/*.ico", "/*.json", "/*.png", "/*.svg", "/*.txt", "/*.webp",
                     "/login", "/register", "/profile", "/profile/**",
-                    "/drink/**", "/user/**", "/admin", "/admin/**").permitAll()
+                    "/drink/**", "/user/**", "/admin", "/admin/**",
+                    "/chats", "/chats/**").permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);

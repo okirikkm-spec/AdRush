@@ -23,3 +23,6 @@ uploads/
 .claude/
 .github/modernize/
 .github/java-upgrade/
+
+### Graphify knowledge graph (пересобирается локально хуком) ###
+graphify-out/

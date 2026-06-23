@@ -7,6 +7,40 @@
     <meta name="theme-color" content="#0c0c10" />
     <meta name="description" content="AdRush — рейтинг энергетиков Adrenaline Rush" />
     <title>AdRush — рейтинг энергетиков</title>
+    <!-- Применяем сохранённое оформление до первой отрисовки (без мигания).
+         Палитра выводится из базового цвета фона — синхронно с src/theme/palette.js -->
+    <script>
+      (function () {
+        try {
+          var d = document.documentElement, s = d.style, ls = localStorage, hex = /^#[0-9a-fA-F]{6}$/;
+          var cl = function (n) { return Math.max(0, Math.min(255, Math.round(n))); };
+          var hx = function (n) { return ("0" + cl(n).toString(16)).slice(-2); };
+          var pr = function (h) { h = h.replace("#", ""); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; };
+          var mix = function (a, b, t) { var A = pr(a), B = pr(b); return "#" + hx(A[0] + (B[0] - A[0]) * t) + hx(A[1] + (B[1] - A[1]) * t) + hx(A[2] + (B[2] - A[2]) * t); };
+          var lum = function (h) { var c = pr(h).map(function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+
+          var a = ls.getItem("ar-accent"); if (a && hex.test(a)) s.setProperty("--accent", a);
+
+          var bg = ls.getItem("ar-bg");
+          if (bg && hex.test(bg)) {
+            var W = "#ffffff", K = "#000000", p, text;
+            if (lum(bg) > 0.45) {
+              text = mix(K, bg, 0.1);
+              p = { "--bg": bg, "--surface": mix(bg, W, 0.55), "--surface-2": mix(bg, K, 0.035), "--surface-3": mix(bg, K, 0.08), "--border": mix(bg, K, 0.11), "--border-light": mix(bg, K, 0.2), "--text": text, "--text-muted": mix(text, bg, 0.46), "--text-faint": mix(text, bg, 0.64), "--grid-line": "rgba(20, 20, 40, 0.05)", "--shadow": "0 6px 24px rgba(20, 20, 40, 0.10)", "--shadow-lg": "0 16px 48px rgba(20, 20, 40, 0.16)" };
+            } else {
+              text = mix(W, bg, 0.06);
+              p = { "--bg": bg, "--surface": mix(bg, W, 0.05), "--surface-2": mix(bg, W, 0.09), "--surface-3": mix(bg, W, 0.15), "--border": mix(bg, W, 0.13), "--border-light": mix(bg, W, 0.21), "--text": text, "--text-muted": mix(text, bg, 0.44), "--text-faint": mix(text, bg, 0.66), "--grid-line": "rgba(255, 255, 255, 0.035)", "--shadow": "0 6px 28px rgba(0, 0, 0, 0.45)", "--shadow-lg": "0 16px 56px rgba(0, 0, 0, 0.6)" };
+            }
+            for (var k in p) s.setProperty(k, p[k]);
+            var m = document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute("content", p["--bg"]);
+          }
+
+          var rs = parseFloat(ls.getItem("ar-radius"));
+          if (rs >= 0 && rs <= 3) s.setProperty("--radius-scale", String(rs));
+          if (ls.getItem("ar-bg-anim") === "off") d.setAttribute("data-bg-anim", "off");
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <noscript>Для работы приложения нужен включённый JavaScript.</noscript>

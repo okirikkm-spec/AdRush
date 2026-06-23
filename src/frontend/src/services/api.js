@@ -6,12 +6,14 @@ export const API_BASE = process.env.REACT_APP_API_BASE || "";
 
 export function saveToken(token) {
   localStorage.setItem("token", token);
+  try { window.dispatchEvent(new Event("ar-auth")); } catch { /* ignore */ }
 }
 export function getToken() {
   return localStorage.getItem("token");
 }
 export function removeToken() {
   localStorage.removeItem("token");
+  try { window.dispatchEvent(new Event("ar-auth")); } catch { /* ignore */ }
 }
 export function isTokenExpired(token) {
   try {
@@ -257,6 +259,45 @@ export function fetchAuditLog({ actorId, action, targetId, q, page = 0, size = 5
 }
 export function fetchAuditActors() {
   return jsonRequest("/api/admin/audit/actors", { auth: true });
+}
+
+/* ─────────────── Чат ─────────────── */
+
+export function fetchChats() {
+  return jsonRequest("/api/chats", { auth: true });
+}
+export function fetchChatUnreadCount() {
+  return jsonRequest("/api/chats/unread-count", { auth: true });
+}
+export function searchChatUsers(q) {
+  return jsonRequest(`/api/chats/users/search?q=${encodeURIComponent(q)}`, { auth: true });
+}
+export function openDirectChat(userId) {
+  return jsonRequest("/api/chats/direct", { method: "POST", body: { userId }, auth: true });
+}
+export function createGroupChat(title, memberIds) {
+  return jsonRequest("/api/chats/group", { method: "POST", body: { title, memberIds }, auth: true });
+}
+export function fetchChat(id) {
+  return jsonRequest(`/api/chats/${id}`, { auth: true });
+}
+export function fetchChatMessages(id, { beforeId, limit = 40 } = {}) {
+  const p = new URLSearchParams();
+  if (beforeId) p.set("beforeId", beforeId);
+  p.set("limit", limit);
+  return jsonRequest(`/api/chats/${id}/messages?${p.toString()}`, { auth: true });
+}
+export function sendChatMessage(id, content) {
+  return jsonRequest(`/api/chats/${id}/messages`, { method: "POST", body: { content }, auth: true });
+}
+export function markChatRead(id) {
+  return jsonRequest(`/api/chats/${id}/read`, { method: "POST", auth: true });
+}
+export function addChatMembers(id, memberIds) {
+  return jsonRequest(`/api/chats/${id}/members`, { method: "POST", body: { memberIds }, auth: true });
+}
+export function leaveChat(id) {
+  return jsonRequest(`/api/chats/${id}/leave`, { method: "POST", auth: true });
 }
 
 /* ─────────────── Уведомления ─────────────── */

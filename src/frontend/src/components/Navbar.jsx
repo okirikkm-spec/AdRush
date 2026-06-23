@@ -1,10 +1,12 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { isAuthenticated, removeToken, fetchMe } from "../services/api";
-import { useTheme } from "../ThemeContext";
+import { useNotifications } from "../hooks/useNotifications";
+import { useChat } from "../ChatContext";
 import Avatar from "./Avatar";
 import BrandText from "./BrandText";
-import NotificationBell from "./NotificationBell";
+import NotificationBell, { NotificationList } from "./NotificationBell";
+import ThemePicker from "./ThemePicker";
 
 function Bolt() {
   return (
@@ -16,24 +18,14 @@ function Bolt() {
   );
 }
 
-function ThemeIcon({ theme }) {
-  return theme === "dark" ? (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
-    </svg>
-  ) : (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z" />
-    </svg>
-  );
-}
-
 export default function Navbar() {
   const navigate = useNavigate();
-  const { theme, toggleTheme } = useTheme();
   const authed = isAuthenticated();
   const [me, setMe] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const { items, unread, loaded, loadAndMarkRead } = useNotifications(authed);
+  const chat = useChat();
+  const chatUnread = chat?.unreadTotal || 0;
 
   useEffect(() => {
     if (authed) fetchMe().then(setMe).catch(() => {});
@@ -42,6 +34,13 @@ export default function Navbar() {
   const handleLogout = () => {
     removeToken();
     navigate("/login");
+  };
+
+  // На мобильных уведомления живут в бургер-меню — открытие меню помечает их прочитанными
+  const toggleMenu = () => {
+    const next = !menuOpen;
+    setMenuOpen(next);
+    if (next && authed) loadAndMarkRead();
   };
 
   const isAdmin = me?.role === "ADMIN";
@@ -54,10 +53,8 @@ export default function Navbar() {
       </Link>
 
       <div className="navbar-actions">
-        {/* На десктопе — обычные кнопки; на мобильных они прячутся в бургер */}
-        <button className="btn-icon navbar-collapsible" onClick={toggleTheme} title="Сменить тему" aria-label="Сменить тему">
-          <ThemeIcon theme={theme} />
-        </button>
+        {/* Редактор оформления (тема, акцент, фон…) — доступен и на мобильных */}
+        <ThemePicker />
 
         {isAdmin && (
           <Link className="btn btn-ghost btn-sm navbar-collapsible" to="/admin">Админка</Link>
@@ -65,7 +62,21 @@ export default function Navbar() {
 
         {authed ? (
           <>
-            <NotificationBell />
+            {/* Чат — доступен и на мобильных (отдельная страница) */}
+            <Link className="btn-icon notif-btn" to="/chats" title="Чаты" aria-label="Чаты">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7a8.5 8.5 0 0 1-.9-3.8A8.38 8.38 0 0 1 12.5 3 8.38 8.38 0 0 1 21 11.5z" />
+              </svg>
+              {chatUnread > 0 && <span className="notif-dot">{chatUnread > 9 ? "9+" : chatUnread}</span>}
+            </Link>
+            {/* Колокол — только на десктопе; на мобильных уведомления уходят в бургер */}
+            <NotificationBell
+              className="navbar-collapsible"
+              items={items}
+              unread={unread}
+              loaded={loaded}
+              onOpen={loadAndMarkRead}
+            />
             <Link className="navbar-user" to="/profile" title="Профиль">
               <Avatar url={me?.avatarUrl} name={me?.displayName || me?.username} size={30} />
               <span className="navbar-user-name" style={{ fontSize: 14, fontWeight: 600 }}>{me?.displayName || "Профиль"}</span>
@@ -79,9 +90,9 @@ export default function Navbar() {
           </>
         )}
 
-        {/* Бургер — только на мобильных (CSS) */}
+        {/* Бургер — только на мобильных (CSS). Точка = есть непрочитанные уведомления */}
         <button className="btn-icon navbar-burger" aria-label="Меню"
-          aria-expanded={menuOpen} onClick={() => setMenuOpen((v) => !v)}>
+          aria-expanded={menuOpen} onClick={toggleMenu}>
           {menuOpen ? (
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <path d="M6 6l12 12M18 6L6 18" />
@@ -91,13 +102,24 @@ export default function Navbar() {
               <path d="M3 6h18M3 12h18M3 18h18" />
             </svg>
           )}
+          {authed && unread > 0 && !menuOpen && (
+            <span className="notif-dot">{unread > 9 ? "9+" : unread}</span>
+          )}
         </button>
       </div>
 
       {menuOpen && (
         <>
           <div className="notif-backdrop" onClick={() => setMenuOpen(false)} />
-          <div className="navbar-menu" role="menu">
+          <div className={"navbar-menu" + (authed ? " has-notif" : "")} role="menu">
+            {authed && (
+              <>
+                <div className="navbar-menu-label">Уведомления</div>
+                <NotificationList items={items} loaded={loaded} />
+                <div className="navbar-menu-divider" />
+              </>
+            )}
+
             {authed ? (
               <button className="navbar-menu-item danger" onClick={() => { setMenuOpen(false); handleLogout(); }}>
                 <span aria-hidden>⎋</span> Выйти
@@ -114,13 +136,6 @@ export default function Navbar() {
                 <span aria-hidden>🛠</span> Админка
               </Link>
             )}
-
-            <div className="navbar-menu-divider" />
-
-            <button className="navbar-menu-item" onClick={() => { toggleTheme(); setMenuOpen(false); }}>
-              <ThemeIcon theme={theme} />
-              {theme === "dark" ? "Светлая тема" : "Тёмная тема"}
-            </button>
           </div>
         </>
       )}

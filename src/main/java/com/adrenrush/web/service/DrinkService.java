@@ -142,6 +142,9 @@ public class DrinkService {
         if (s.contains("monster") || n.startsWith("monster") || n.contains("monster")) {
             return MonsterParserService.BRAND;
         }
+        if (s.contains("redbull") || s.contains("red-bull") || n.startsWith("red bull") || n.contains("red bull")) {
+            return RedBullParserService.BRAND;
+        }
         return ParserService.BRAND;
     }
 
