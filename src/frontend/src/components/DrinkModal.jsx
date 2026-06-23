@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { fetchDrink, fetchMe, updateDrink, deleteDrink, isAuthenticated, mediaUrl } from "../services/api";
 import { coverStyle } from "../utils/coverStyle";
+import { useSwipeToClose } from "../hooks/useSwipeToClose";
 import PhotoGallery from "./PhotoGallery";
 import ReviewSection from "./ReviewSection";
 import CoverFramerModal from "./CoverFramerModal";
@@ -81,9 +82,12 @@ export default function DrinkModal({ drinkId, summary, onClose, onChanged }) {
 
   const cover = drink ? mediaUrl(drink.coverUrl) : null;
 
+  // на сенсорных устройствах карточку можно закрыть свайпом справа налево
+  const swipeRef = useSwipeToClose(onClose);
+
   return (
     <div className="modal-overlay" onMouseDown={onClose}>
-      <div className="modal modal-detail" onMouseDown={(e) => e.stopPropagation()} role="dialog">
+      <div className="modal modal-detail" ref={swipeRef} onMouseDown={(e) => e.stopPropagation()} role="dialog">
         <button className="modal-close modal-close-float" onClick={onClose} aria-label="Закрыть">×</button>
 
         <div className="modal-body modal-detail-body">
