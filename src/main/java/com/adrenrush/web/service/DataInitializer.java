@@ -12,6 +12,8 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Component;
 
+import java.util.UUID;
+
 @Component
 @RequiredArgsConstructor
 public class DataInitializer implements ApplicationRunner {
@@ -35,10 +37,27 @@ public class DataInitializer implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
+        ensureSystemUser();
         ensureAdmin();
         promoteSuperAdmins();
         drinkService.backfillMissingBrands();
         firstRunParse();
+    }
+
+    /**
+     * Служебный аккаунт «Система» — от его имени приходят уведомления в чат (бан, предупреждения и т.п.).
+     * Логиниться под ним нельзя: пароль — случайный неизвестный. Создаётся один раз.
+     */
+    private void ensureSystemUser() {
+        if (userRepository.findBySystemTrue().isPresent()) return;
+        User sys = userRepository.findByUsername("system").orElseGet(User::new);
+        sys.setUsername("system");
+        sys.setDisplayName("Система");
+        sys.setPassword(passwordEncoder.encode(UUID.randomUUID().toString()));
+        sys.setRole(RoleEnum.USER);
+        sys.setSystem(true);
+        userRepository.save(sys);
+        log.info("Создан служебный аккаунт «Система» для уведомлений в чате");
     }
 
     /** Назначает роль ADMIN существующим супер-администраторам (например, Inori). */

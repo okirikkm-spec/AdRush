@@ -96,8 +96,7 @@ public class RedBullParserService {
                 String href = card.absUrl("href");
                 if (!isProductHref(href) || !seen.add(href)) continue;
 
-                String name = normalize(textOf(card.selectFirst("h3[class*=product-label]")));
-                if (name.isBlank()) name = normalize(textOf(card.selectFirst("h3")));
+                String name = productName(card);
                 String imageUrl = bestImage(card);
                 if (name.isBlank() || imageUrl == null) continue;
 
@@ -192,6 +191,23 @@ public class RedBullParserService {
         return !rest.isBlank();
     }
 
+    /**
+     * Имя «бренд + вкус» из заголовка карточки. В DOM бренд (собственный текст h3, напр. "Red Bull")
+     * и вкус (вложенный inline-{@code <span>}) идут без пробела между собой, поэтому Jsoup.text()
+     * склеил бы их ("Red BullEnergy Drink"). Берём части по отдельности и соединяем пробелом.
+     */
+    private String productName(Element card) {
+        Element label = card.selectFirst("h3[class*=product-label]");
+        if (label == null) label = card.selectFirst("h3");
+        if (label == null) return "";
+        Element flavor = label.selectFirst("span[class*=product-name]");
+        if (flavor != null) {
+            String joined = (normalize(label.ownText()) + " " + normalize(flavor.text())).trim();
+            if (!joined.isBlank()) return joined;
+        }
+        return normalize(label.text());
+    }
+
     /** Абсолютная ссылка на пэкшот: сперва img.product-rail_image, потом любой img (src, затем srcset). */
     private String bestImage(Element card) {
         Element img = card.selectFirst("img[class*=product-rail_image]");
@@ -208,10 +224,6 @@ public class RedBullParserService {
         String first = srcset.split(",")[0].trim();
         int sp = first.indexOf(' ');
         return sp > 0 ? first.substring(0, sp) : first;
-    }
-
-    private String textOf(Element el) {
-        return el == null ? "" : el.text();
     }
 
     /**

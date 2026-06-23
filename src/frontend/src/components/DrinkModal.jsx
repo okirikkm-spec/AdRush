@@ -88,8 +88,6 @@ export default function DrinkModal({ drinkId, summary, onClose, onChanged }) {
   return (
     <div className="modal-overlay" onMouseDown={onClose}>
       <div className="modal modal-detail" ref={swipeRef} onMouseDown={(e) => e.stopPropagation()} role="dialog">
-        <button className="modal-close modal-close-float" onClick={onClose} aria-label="Закрыть">×</button>
-
         <div className="modal-body modal-detail-body">
           {/* Галерея: после загрузки полных данных — с миниатюрами и управлением (в режиме правки) */}
           {drink && Array.isArray(drink.photos) ? (

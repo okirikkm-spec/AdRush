@@ -35,6 +35,11 @@ public class User {
     @Column(nullable = false)
     private boolean profilePrivate = false;
 
+    /** Служебный аккаунт «Система»: отправитель уведомлений в чате. Скрыт из поиска, логиниться нельзя. */
+    // columnDefinition с DEFAULT — чтобы ddl-auto=update смог добавить NOT NULL колонку в уже заполненную таблицу
+    @Column(nullable = false, columnDefinition = "boolean not null default false")
+    private boolean system = false;
+
     /* ── Двухфакторная аутентификация (TOTP / authenticator) ── */
     private String totpSecret;
 

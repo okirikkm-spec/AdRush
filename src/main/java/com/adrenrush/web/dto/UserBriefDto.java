@@ -10,6 +10,8 @@ public class UserBriefDto {
     private String username;
     private String displayName;
     private String avatarUrl;
+    /** Служебный аккаунт «Система» — на фронте по нему беседа становится «только для чтения». */
+    private boolean system;
 
     public static UserBriefDto from(User user) {
         UserBriefDto dto = new UserBriefDto();
@@ -17,6 +19,7 @@ public class UserBriefDto {
         dto.setUsername(user.getUsername());
         dto.setDisplayName(user.getDisplayName() != null ? user.getDisplayName() : user.getUsername());
         dto.setAvatarUrl(user.getAvatarPath());
+        dto.setSystem(user.isSystem());
         return dto;
     }
 }

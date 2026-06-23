@@ -1062,6 +1062,12 @@ a.mini-review-name:hover { color: var(--accent); }
 .chat-composer .input { resize: none; max-height: 120px; min-height: 42px; line-height: 1.4; }
 .chat-send { flex-shrink: 0; width: 42px; height: 42px; padding: 0; border-radius: 50%; }
 
+/* Беседа со «Системой» — только для чтения (вместо композера) */
+.chat-readonly {
+  padding: 16px; border-top: 1px solid var(--border); flex-shrink: 0;
+  text-align: center; font-size: 13px; color: var(--text-muted); font-style: italic;
+}
+
 /* Поиск пользователей / новый чат */
 .chat-search { display: flex; flex-direction: column; gap: 10px; }
 .chat-search-results { display: flex; flex-direction: column; gap: 4px; max-height: 320px; overflow-y: auto; }

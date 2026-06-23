@@ -18,6 +18,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByUsername(String username);
     boolean existsByRole(RoleEnum role);
 
+    /** Служебный аккаунт «Система» (единственный с system=true). */
+    Optional<User> findBySystemTrue();
+
     List<User> findAllByOrderByIdAsc();
 
     /** Поиск пользователей для начала чата (по логину или отображаемому имени). */

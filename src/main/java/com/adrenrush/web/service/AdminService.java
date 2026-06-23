@@ -8,7 +8,6 @@ import com.adrenrush.web.enums.AuditTargetType;
 import com.adrenrush.web.enums.RoleEnum;
 import com.adrenrush.web.exception.ApiException;
 import com.adrenrush.web.repository.DrinkPhotoRepository;
-import com.adrenrush.web.repository.NotificationRepository;
 import com.adrenrush.web.repository.ReviewRepository;
 import com.adrenrush.web.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -29,9 +28,8 @@ public class AdminService {
 
     private final UserRepository userRepository;
     private final ReviewRepository reviewRepository;
-    private final NotificationRepository notificationRepository;
     private final DrinkPhotoRepository photoRepository;
-    private final NotificationService notificationService;
+    private final ChatService chatService;
     private final SuperAdmins superAdmins;
     private final AuditService auditService;
 
@@ -98,7 +96,7 @@ public class AdminService {
         userRepository.save(u);
 
         String until = u.getBannedUntil() != null ? "до " + u.getBannedUntil() : "навсегда";
-        notificationService.notify(u, "BANNED", "Аккаунт заблокирован (" + until + "). Причина: " + reason);
+        chatService.sendSystemNotification(u, "Аккаунт заблокирован (" + until + "). Причина: " + reason);
     }
 
     @Transactional
@@ -109,7 +107,7 @@ public class AdminService {
         u.setBannedUntil(null);
         u.setBanReason(null);
         userRepository.save(u);
-        notificationService.notify(u, "UNBANNED", "Блокировка вашего аккаунта снята.");
+        chatService.sendSystemNotification(u, "Блокировка вашего аккаунта снята.");
         auditService.recordUser(actor, AuditAction.UNBAN, u, "Блокировка снята");
     }
 
@@ -125,7 +123,6 @@ public class AdminService {
         String username = u.getUsername();
         int reviews = reviewRepository.countByUserId(userId);
         reviewRepository.deleteByUserId(userId);
-        notificationRepository.deleteByUserId(userId);
         photoRepository.detachUploader(userId);
         userRepository.delete(u);
         auditService.record(actor, AuditAction.DELETE_USER, AuditTargetType.USER, userId, username,
@@ -144,7 +141,7 @@ public class AdminService {
 
         String msg = "Ваш отзыв на «" + drinkName + "» удалён модератором."
             + (reason != null && !reason.isBlank() ? " Причина: " + reason : "");
-        notificationService.notify(author, "REVIEW_DELETED", msg);
+        chatService.sendSystemNotification(author, msg);
         auditService.recordUser(actor, AuditAction.DELETE_REVIEW, author,
             "Удалён отзыв на «" + drinkName + "»"
                 + (reason != null && !reason.isBlank() ? ". Причина: " + reason : ""));
@@ -190,13 +187,13 @@ public class AdminService {
             target.setRole(RoleEnum.ADMIN);
             target.setBannedUntil(null);
             target.setBanReason(null);
-            notificationService.notify(target, "ROLE", "Вам выданы права администратора.");
+            chatService.sendSystemNotification(target, "Вам выданы права администратора.");
         } else {
             if (superAdmins.is(target.getUsername())) {
                 throw ApiException.badRequest("Нельзя снять права у супер-администратора");
             }
             target.setRole(RoleEnum.USER);
-            notificationService.notify(target, "ROLE", "Права администратора сняты.");
+            chatService.sendSystemNotification(target, "Права администратора сняты.");
         }
         userRepository.save(target);
         auditService.recordUser(actor, makeAdmin ? AuditAction.GRANT_ADMIN : AuditAction.REVOKE_ADMIN,
@@ -213,7 +210,7 @@ public class AdminService {
         String text = hasMsg
             ? "⚠ Предупреждение от модератора: " + message.trim()
             : "Предупреждение от модератора: соблюдайте правила сообщества.";
-        notificationService.notify(u, "WARNING", text);
+        chatService.sendSystemNotification(u, text);
         auditService.recordUser(actor, AuditAction.WARN, u,
             hasMsg ? "Предупреждение: " + message.trim() : "Предупреждение (без текста)");
     }

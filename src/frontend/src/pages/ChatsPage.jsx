@@ -20,6 +20,10 @@ const convTitle = (conv, meId) => {
 const convAvatarUser = (conv, meId) =>
   conv?.type === "GROUP" ? null : otherMember(conv, meId)?.user || null;
 
+/** Беседа со служебным аккаунтом «Система» (уведомления) — только для чтения. */
+const isSystemConv = (conv, meId) =>
+  conv?.type === "DIRECT" && !!otherMember(conv, meId)?.user?.system;
+
 const fmtTime = (iso) => {
   try { return new Date(iso).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }); }
   catch { return ""; }
@@ -254,6 +258,7 @@ function ConvList({ activeId, onSelect, meId, onNew }) {
 function ConvView({ conv, meId, onBack }) {
   const { messages, typing, send, sendTyping, loadMore, leave } = useChat();
   const list = messages[conv.id];
+  const systemConv = isSystemConv(conv, meId);
   const [text, setText] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const scrollRef = useRef(null);
@@ -342,14 +347,20 @@ function ConvView({ conv, meId, onBack }) {
         })}
       </div>
 
-      <div className="chat-typing-line">{typers.length > 0 && `${typers.join(", ")} печатает…`}</div>
+      {systemConv ? (
+        <div className="chat-readonly">🔔 Системные уведомления — отвечать нельзя</div>
+      ) : (
+        <>
+          <div className="chat-typing-line">{typers.length > 0 && `${typers.join(", ")} печатает…`}</div>
 
-      <div className="chat-composer">
-        <textarea className="input" rows={1} value={text} onChange={onInput} onKeyDown={onKeyDown} placeholder="Сообщение…" />
-        <button className="btn btn-primary chat-send" onClick={doSend} disabled={!text.trim()} aria-label="Отправить">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 20.5v-6l8-2-8-2v-6l19 8z" /></svg>
-        </button>
-      </div>
+          <div className="chat-composer">
+            <textarea className="input" rows={1} value={text} onChange={onInput} onKeyDown={onKeyDown} placeholder="Сообщение…" />
+            <button className="btn btn-primary chat-send" onClick={doSend} disabled={!text.trim()} aria-label="Отправить">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 20.5v-6l8-2-8-2v-6l19 8z" /></svg>
+            </button>
+          </div>
+        </>
+      )}
 
       {showAdd && <AddMembersModal conv={conv} onClose={() => setShowAdd(false)} />}
     </section>

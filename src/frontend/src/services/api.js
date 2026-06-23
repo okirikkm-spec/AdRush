@@ -299,15 +299,3 @@ export function addChatMembers(id, memberIds) {
 export function leaveChat(id) {
   return jsonRequest(`/api/chats/${id}/leave`, { method: "POST", auth: true });
 }
-
-/* ─────────────── Уведомления ─────────────── */
-
-export function fetchNotifications() {
-  return jsonRequest("/api/notifications", { auth: true });
-}
-export function fetchUnreadCount() {
-  return jsonRequest("/api/notifications/unread-count", { auth: true });
-}
-export function markNotificationsRead() {
-  return jsonRequest("/api/notifications/read", { method: "POST", auth: true });
-}

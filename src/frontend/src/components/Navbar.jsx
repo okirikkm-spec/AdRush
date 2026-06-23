@@ -1,11 +1,9 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { isAuthenticated, removeToken, fetchMe } from "../services/api";
-import { useNotifications } from "../hooks/useNotifications";
 import { useChat } from "../ChatContext";
 import Avatar from "./Avatar";
 import BrandText from "./BrandText";
-import NotificationBell, { NotificationList } from "./NotificationBell";
 import ThemePicker from "./ThemePicker";
 
 function Bolt() {
@@ -23,7 +21,6 @@ export default function Navbar() {
   const authed = isAuthenticated();
   const [me, setMe] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const { items, unread, loaded, loadAndMarkRead } = useNotifications(authed);
   const chat = useChat();
   const chatUnread = chat?.unreadTotal || 0;
 
@@ -36,12 +33,7 @@ export default function Navbar() {
     navigate("/login");
   };
 
-  // На мобильных уведомления живут в бургер-меню — открытие меню помечает их прочитанными
-  const toggleMenu = () => {
-    const next = !menuOpen;
-    setMenuOpen(next);
-    if (next && authed) loadAndMarkRead();
-  };
+  const toggleMenu = () => setMenuOpen((v) => !v);
 
   const isAdmin = me?.role === "ADMIN";
 
@@ -69,14 +61,6 @@ export default function Navbar() {
               </svg>
               {chatUnread > 0 && <span className="notif-dot">{chatUnread > 9 ? "9+" : chatUnread}</span>}
             </Link>
-            {/* Колокол — только на десктопе; на мобильных уведомления уходят в бургер */}
-            <NotificationBell
-              className="navbar-collapsible"
-              items={items}
-              unread={unread}
-              loaded={loaded}
-              onOpen={loadAndMarkRead}
-            />
             <Link className="navbar-user" to="/profile" title="Профиль">
               <Avatar url={me?.avatarUrl} name={me?.displayName || me?.username} size={30} />
               <span className="navbar-user-name" style={{ fontSize: 14, fontWeight: 600 }}>{me?.displayName || "Профиль"}</span>
@@ -90,7 +74,7 @@ export default function Navbar() {
           </>
         )}
 
-        {/* Бургер — только на мобильных (CSS). Точка = есть непрочитанные уведомления */}
+        {/* Бургер — только на мобильных (CSS) */}
         <button className="btn-icon navbar-burger" aria-label="Меню"
           aria-expanded={menuOpen} onClick={toggleMenu}>
           {menuOpen ? (
@@ -102,24 +86,13 @@ export default function Navbar() {
               <path d="M3 6h18M3 12h18M3 18h18" />
             </svg>
           )}
-          {authed && unread > 0 && !menuOpen && (
-            <span className="notif-dot">{unread > 9 ? "9+" : unread}</span>
-          )}
         </button>
       </div>
 
       {menuOpen && (
         <>
           <div className="notif-backdrop" onClick={() => setMenuOpen(false)} />
-          <div className={"navbar-menu" + (authed ? " has-notif" : "")} role="menu">
-            {authed && (
-              <>
-                <div className="navbar-menu-label">Уведомления</div>
-                <NotificationList items={items} loaded={loaded} />
-                <div className="navbar-menu-divider" />
-              </>
-            )}
-
+          <div className="navbar-menu" role="menu">
             {authed ? (
               <button className="navbar-menu-item danger" onClick={() => { setMenuOpen(false); handleLogout(); }}>
                 <span aria-hidden>⎋</span> Выйти

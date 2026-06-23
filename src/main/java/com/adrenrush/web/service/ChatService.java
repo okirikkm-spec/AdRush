@@ -72,6 +72,7 @@ public class ChatService {
         String term = q.strip();
         return userRepo.findByUsernameContainingIgnoreCaseOrDisplayNameContainingIgnoreCase(term, term, PageRequest.of(0, 30)).stream()
             .filter(u -> !u.getId().equals(me.getId()))
+            .filter(u -> !u.isSystem())
             .filter(u -> !banService.isBanned(u))
             .limit(20)
             .map(UserBriefDto::from)
@@ -84,6 +85,7 @@ public class ChatService {
     public ConversationDto getOrCreateDirect(User me, Long otherId) {
         if (otherId.equals(me.getId())) throw ApiException.badRequest("Нельзя начать чат с собой");
         User other = userRepo.findById(otherId).orElseThrow(() -> ApiException.notFound("Пользователь не найден"));
+        if (other.isSystem()) throw ApiException.badRequest("Это служебный аккаунт");
         if (banService.isBanned(other)) throw ApiException.badRequest("Пользователь недоступен");
 
         List<Long> existing = memberRepo.findDirectConversationIds(me.getId(), otherId);
@@ -163,6 +165,9 @@ public class ChatService {
     @Transactional
     public ChatMessageDto sendMessage(Long convId, User me, String content) {
         ConversationMember mine = requireMember(convId, me.getId());
+        if (!me.isSystem() && memberRepo.hasSystemMember(convId)) {
+            throw ApiException.forbidden("Системные уведомления — отвечать нельзя");
+        }
         if (content == null || content.isBlank()) throw ApiException.badRequest("Пустое сообщение");
         String text = content.strip();
         if (text.length() > 4000) text = text.substring(0, 4000);
@@ -217,6 +222,54 @@ public class ChatService {
             if (m.getUser().getId().equals(me.getId())) continue;
             send(m.getUser().getUsername(), ev);
         }
+    }
+
+    /* ─────────────── Системные уведомления ─────────────── */
+
+    /**
+     * Доставляет уведомление пользователю в чат от служебного аккаунта «Система» — личной беседой,
+     * только для чтения (заменяет прежнюю отдельную систему уведомлений: бан, предупреждения и т.п.).
+     * Тихо ничего не делает, если системный аккаунт ещё не создан или адресат — он сам.
+     */
+    @Transactional
+    public void sendSystemNotification(User target, String text) {
+        if (target == null || text == null || text.isBlank()) return;
+        User system = userRepo.findBySystemTrue().orElse(null);
+        if (system == null || system.getId().equals(target.getId())) return;
+
+        Conversation c = getOrCreateSystemDirect(system, target);
+
+        ChatMessage msg = new ChatMessage();
+        msg.setConversation(c);
+        msg.setSender(system);
+        msg.setContent(text.strip());
+        messageRepo.save(msg);
+
+        c.setLastMessageAt(msg.getCreatedAt());
+        conversationRepo.save(c);
+
+        // живая доставка как у обычного сообщения: у адресата всплывёт беседа и +1 непрочитанное
+        ChatEventDto ev = ChatEventDto.of("message");
+        ev.setConversationId(c.getId());
+        ev.setMessage(ChatMessageDto.from(msg));
+        for (ConversationMember m : memberRepo.findByConversationId(c.getId())) {
+            send(m.getUser().getUsername(), ev);
+        }
+    }
+
+    /** Личная беседа «Система ↔ пользователь»: переиспользуем существующую либо создаём. */
+    private Conversation getOrCreateSystemDirect(User system, User target) {
+        List<Long> existing = memberRepo.findDirectConversationIds(system.getId(), target.getId());
+        if (!existing.isEmpty()) {
+            return conversationRepo.findById(existing.get(0)).orElseThrow();
+        }
+        Conversation c = new Conversation();
+        c.setType(ConversationType.DIRECT);
+        c.setCreatedBy(system);
+        conversationRepo.save(c);
+        addMember(c, system, false);
+        addMember(c, target, false);
+        return c;
     }
 
     /* ─────────────── Вспомогательное ─────────────── */

@@ -31,4 +31,8 @@ public interface ConversationMemberRepository extends JpaRepository<Conversation
         HAVING COUNT(DISTINCT m.user.id) = 2
         """)
     List<Long> findDirectConversationIds(@Param("a") Long a, @Param("b") Long b);
+
+    /** Содержит ли беседа служебный аккаунт «Система» (такие беседы — только для чтения). */
+    @Query("SELECT COUNT(m) > 0 FROM ConversationMember m WHERE m.conversation.id = :convId AND m.user.system = true")
+    boolean hasSystemMember(@Param("convId") Long convId);
 }
