@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Avatar from "../components/Avatar";
 import { useChat } from "../ChatContext";
-import { searchChatUsers } from "../services/api";
+import { searchChatUsers, mediaUrl } from "../services/api";
 
 /* ─────────────── helpers ─────────────── */
 
@@ -32,6 +32,46 @@ const fmtDay = (iso) => {
   try { return new Date(iso).toLocaleDateString("ru-RU", { day: "numeric", month: "long" }); }
   catch { return ""; }
 };
+
+/** Короткое превью сообщения для списка бесед (картинки/карточки без текста). */
+const msgPreview = (m) => {
+  if (!m) return "";
+  if (m.imageUrl) return "📷 Фото";
+  if (m.sharedDrink) return `🥤 ${m.sharedDrink.name}`;
+  if (m.sharedReview) return `💬 Отзыв · ${m.sharedReview.drinkName || ""}`;
+  return m.content;
+};
+
+/** Карточка энергетика внутри сообщения (кликабельна → /drink/:id). */
+function SharedDrink({ drink }) {
+  return (
+    <Link to={`/drink/${drink.id}`} className="chat-card chat-card-drink">
+      {drink.coverUrl
+        ? <img className="chat-card-cover" src={mediaUrl(drink.coverUrl)} alt="" loading="lazy" />
+        : <div className="chat-card-cover chat-card-cover-empty">⚡</div>}
+      <div className="chat-card-info">
+        <div className="chat-card-title">{drink.name}</div>
+        {drink.brand && <div className="chat-card-sub">{drink.brand}</div>}
+        <div className="chat-card-meta">★ {drink.averageRating > 0 ? drink.averageRating.toFixed(1) : "—"} · {drink.reviewCount} оц.</div>
+      </div>
+    </Link>
+  );
+}
+
+/** Карточка отзыва внутри сообщения (кликабельна → /drink/:id энергетика отзыва). */
+function SharedReview({ review }) {
+  return (
+    <Link to={`/drink/${review.drinkId}`} className="chat-card chat-card-review">
+      <div className="chat-card-review-head">
+        <Avatar url={review.authorAvatarUrl} name={review.authorName} size={24} />
+        <span className="chat-card-review-author">{review.authorName}</span>
+        <span className="chat-card-review-rating">★ {review.rating}/10</span>
+      </div>
+      <div className="chat-card-sub">об энергетике «{review.drinkName}»</div>
+      {review.text && <div className="chat-card-review-text">{review.text}</div>}
+    </Link>
+  );
+}
 
 /* ─────────────── Поиск пользователей ─────────────── */
 
@@ -239,7 +279,7 @@ function ConvList({ activeId, onSelect, meId, onNew }) {
                 <div className="chat-conv-bottom">
                   <span className="chat-conv-preview">
                     {c.lastMessage
-                      ? (c.type === "GROUP" ? `${c.lastMessage.sender.displayName}: ` : "") + c.lastMessage.content
+                      ? (c.type === "GROUP" ? `${c.lastMessage.sender.displayName}: ` : "") + msgPreview(c.lastMessage)
                       : (c.type === "GROUP" ? "Группа создана" : "Нет сообщений")}
                   </span>
                   {c.unreadCount > 0 && <span className="chat-unread">{c.unreadCount > 99 ? "99+" : c.unreadCount}</span>}
@@ -256,14 +296,22 @@ function ConvList({ activeId, onSelect, meId, onNew }) {
 /* ─────────────── Активная беседа ─────────────── */
 
 function ConvView({ conv, meId, onBack }) {
-  const { messages, typing, send, sendTyping, loadMore, leave } = useChat();
+  const { messages, typing, send, sendImage, sendTyping, loadMore, leave } = useChat();
   const list = messages[conv.id];
   const systemConv = isSystemConv(conv, meId);
   const [text, setText] = useState("");
   const [showAdd, setShowAdd] = useState(false);
+  const [lightbox, setLightbox] = useState(null);
   const scrollRef = useRef(null);
+  const fileRef = useRef(null);
   const lastTyping = useRef(0);
   const navigate = useNavigate();
+
+  const onPickImage = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (file) sendImage(conv.id, file).catch(() => {});
+  };
 
   // автопрокрутка вниз при новых сообщениях
   useEffect(() => {
@@ -333,9 +381,15 @@ function ConvView({ conv, meId, onBack }) {
               {showDay && <div className="chat-day">{day}</div>}
               <div className={"chat-msg" + (mine ? " mine" : "")}>
                 {!mine && conv.type === "GROUP" && <Avatar url={m.sender.avatarUrl} name={m.sender.displayName} size={28} />}
-                <div className="chat-bubble">
+                <div className={"chat-bubble" + ((m.imageUrl || m.sharedDrink || m.sharedReview) ? " has-media" : "")}>
                   {!mine && conv.type === "GROUP" && <div className="chat-bubble-author">{m.sender.displayName}</div>}
-                  <span className="chat-bubble-text">{m.content}</span>
+                  {m.imageUrl && (
+                    <img className="chat-bubble-img" src={mediaUrl(m.imageUrl)} alt="Картинка" loading="lazy"
+                      onClick={() => setLightbox(mediaUrl(m.imageUrl))} />
+                  )}
+                  {m.sharedDrink && <SharedDrink drink={m.sharedDrink} />}
+                  {m.sharedReview && <SharedReview review={m.sharedReview} />}
+                  {m.content && <span className="chat-bubble-text">{m.content}</span>}
                   <span className="chat-bubble-meta">
                     {fmtTime(m.createdAt)}
                     {mine && conv.type === "DIRECT" && <span className={"chat-tick" + (read ? " read" : "")}>{read ? "✓✓" : "✓"}</span>}
@@ -354,6 +408,13 @@ function ConvView({ conv, meId, onBack }) {
           <div className="chat-typing-line">{typers.length > 0 && `${typers.join(", ")} печатает…`}</div>
 
           <div className="chat-composer">
+            <input ref={fileRef} type="file" accept="image/*" hidden onChange={onPickImage} />
+            <button type="button" className="chat-attach" title="Прикрепить картинку"
+              onClick={() => fileRef.current?.click()} aria-label="Картинка">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" />
+              </svg>
+            </button>
             <textarea className="input" rows={1} value={text} onChange={onInput} onKeyDown={onKeyDown} placeholder="Сообщение…" />
             <button className="btn btn-primary chat-send" onClick={doSend} disabled={!text.trim()} aria-label="Отправить">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 20.5v-6l8-2-8-2v-6l19 8z" /></svg>
@@ -363,6 +424,13 @@ function ConvView({ conv, meId, onBack }) {
       )}
 
       {showAdd && <AddMembersModal conv={conv} onClose={() => setShowAdd(false)} />}
+
+      {lightbox && (
+        <div className="chat-lightbox" onClick={() => setLightbox(null)}>
+          <img src={lightbox} alt="" onClick={(e) => e.stopPropagation()} />
+          <button className="chat-lightbox-close" onClick={() => setLightbox(null)} aria-label="Закрыть">×</button>
+        </div>
+      )}
     </section>
   );
 }

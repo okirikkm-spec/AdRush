@@ -23,8 +23,21 @@ public class ChatMessage {
     @JoinColumn(name = "sender_id")
     private User sender;
 
+    /** Текст (или подпись к картинке). Для вложений-карточек пустой. */
     @Column(columnDefinition = "text", nullable = false)
     private String content;
+
+    /** Вложение-картинка: публичный путь (/media/... или /uploads/...), иначе null. */
+    @Column(name = "image_path")
+    private String imagePath;
+
+    /** Расшаренный энергетик (id карточки), иначе null. */
+    @Column(name = "shared_drink_id")
+    private Long sharedDrinkId;
+
+    /** Расшаренный отзыв (id), иначе null. */
+    @Column(name = "shared_review_id")
+    private Long sharedReviewId;
 
     @Column(nullable = false)
     private Instant createdAt = Instant.now();

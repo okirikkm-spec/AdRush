@@ -10,7 +10,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -69,6 +71,29 @@ public class ChatController {
                                                @RequestBody Map<String, Object> body) {
         String content = body.get("content") == null ? null : body.get("content").toString();
         return ResponseEntity.ok(chatService.sendMessage(id, me, content));
+    }
+
+    @PostMapping("/{id}/messages/image")
+    public ResponseEntity<ChatMessageDto> sendImage(@AuthenticationPrincipal User me,
+                                                    @PathVariable Long id,
+                                                    @RequestParam("file") MultipartFile file,
+                                                    @RequestParam(value = "caption", required = false) String caption) {
+        if (file == null || file.isEmpty()) throw ApiException.badRequest("Пустой файл");
+        byte[] bytes;
+        try { bytes = file.getBytes(); } catch (IOException e) { throw ApiException.badRequest("Не удалось прочитать файл"); }
+        return ResponseEntity.ok(chatService.sendImage(id, me, bytes, file.getContentType(), caption));
+    }
+
+    /**
+     * Поделиться карточкой энергетика (drinkId) или отзывом (reviewId): либо в существующую беседу
+     * (conversationId), либо личным сообщением получателю (recipientUserId).
+     */
+    @PostMapping("/share")
+    public ResponseEntity<Map<String, Object>> share(@AuthenticationPrincipal User me, @RequestBody Map<String, Object> body) {
+        ChatMessageDto msg = chatService.share(me,
+            toLong(body.get("conversationId")), toLong(body.get("recipientUserId")),
+            toLong(body.get("drinkId")), toLong(body.get("reviewId")));
+        return ResponseEntity.ok(Map.of("conversationId", msg.getConversationId(), "message", msg));
     }
 
     @PostMapping("/{id}/read")

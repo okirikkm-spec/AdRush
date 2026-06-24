@@ -299,3 +299,26 @@ export function addChatMembers(id, memberIds) {
 export function leaveChat(id) {
   return jsonRequest(`/api/chats/${id}/leave`, { method: "POST", auth: true });
 }
+/** Отправить картинку в беседу (multipart). caption — необязательная подпись. */
+export async function sendChatImage(convId, file, caption) {
+  const formData = new FormData();
+  formData.append("file", file);
+  if (caption) formData.append("caption", caption);
+  const res = await fetch(`${API_BASE}/api/chats/${convId}/messages/image`, {
+    method: "POST", headers: authHeaders(), body: formData,
+  });
+  if (!res.ok) throw await parseError(res, "Не удалось отправить изображение");
+  return res.json();
+}
+/**
+ * Поделиться карточкой энергетика (drinkId) или отзывом (reviewId): получателю
+ * (recipientUserId → личка) или в существующую беседу (conversationId).
+ * Возвращает { conversationId, message }.
+ */
+export function shareToChat({ recipientUserId, conversationId, drinkId, reviewId }) {
+  return jsonRequest("/api/chats/share", {
+    method: "POST",
+    body: { recipientUserId, conversationId, drinkId, reviewId },
+    auth: true,
+  });
+}

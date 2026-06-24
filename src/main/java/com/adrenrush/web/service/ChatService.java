@@ -4,12 +4,14 @@ import com.adrenrush.web.dto.*;
 import com.adrenrush.web.entity.ChatMessage;
 import com.adrenrush.web.entity.Conversation;
 import com.adrenrush.web.entity.ConversationMember;
+import com.adrenrush.web.entity.Review;
 import com.adrenrush.web.entity.User;
 import com.adrenrush.web.enums.ConversationType;
 import com.adrenrush.web.exception.ApiException;
 import com.adrenrush.web.repository.ChatMessageRepository;
 import com.adrenrush.web.repository.ConversationMemberRepository;
 import com.adrenrush.web.repository.ConversationRepository;
+import com.adrenrush.web.repository.ReviewRepository;
 import com.adrenrush.web.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -17,6 +19,7 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.ByteArrayInputStream;
 import java.time.Instant;
 import java.util.*;
 
@@ -30,7 +33,10 @@ public class ChatService {
     private final ConversationMemberRepository memberRepo;
     private final ChatMessageRepository messageRepo;
     private final UserRepository userRepo;
+    private final ReviewRepository reviewRepo;
     private final BanService banService;
+    private final StorageService storageService;
+    private final DrinkService drinkService;
     private final SimpMessagingTemplate messagingTemplate;
 
     /* ─────────────── Чтение ─────────────── */
@@ -56,7 +62,7 @@ public class ChatService {
         List<ChatMessage> msgs = (beforeId == null)
             ? messageRepo.findByConversationIdOrderByIdDesc(convId, page)
             : messageRepo.findByConversationIdAndIdLessThanOrderByIdDesc(convId, beforeId, page);
-        List<ChatMessageDto> dtos = new ArrayList<>(msgs.stream().map(ChatMessageDto::from).toList());
+        List<ChatMessageDto> dtos = new ArrayList<>(msgs.stream().map(this::messageDto).toList());
         Collections.reverse(dtos); // по возрастанию (старые сверху)
         return dtos;
     }
@@ -165,26 +171,86 @@ public class ChatService {
     @Transactional
     public ChatMessageDto sendMessage(Long convId, User me, String content) {
         ConversationMember mine = requireMember(convId, me.getId());
-        if (!me.isSystem() && memberRepo.hasSystemMember(convId)) {
-            throw ApiException.forbidden("Системные уведомления — отвечать нельзя");
-        }
+        requireWritable(convId, me);
         if (content == null || content.isBlank()) throw ApiException.badRequest("Пустое сообщение");
         String text = content.strip();
         if (text.length() > 4000) text = text.substring(0, 4000);
 
-        Conversation c = mine.getConversation();
         ChatMessage msg = new ChatMessage();
-        msg.setConversation(c);
+        msg.setConversation(mine.getConversation());
         msg.setSender(me);
         msg.setContent(text);
-        messageRepo.save(msg);
+        return persistAndBroadcast(convId, mine, msg);
+    }
 
+    /** Отправка картинки-вложения (необязательная подпись передаётся в caption). */
+    @Transactional
+    public ChatMessageDto sendImage(Long convId, User me, byte[] bytes, String contentType, String caption) {
+        ConversationMember mine = requireMember(convId, me.getId());
+        requireWritable(convId, me);
+        if (bytes == null || bytes.length == 0) throw ApiException.badRequest("Пустой файл");
+        if (contentType == null || !contentType.toLowerCase().startsWith("image/")) {
+            throw ApiException.badRequest("Можно отправлять только изображения");
+        }
+        String key = "chat/" + convId + "/" + UUID.randomUUID() + extFromContentType(contentType);
+        String path;
+        try {
+            path = storageService.store(key, new ByteArrayInputStream(bytes), contentType);
+        } catch (Exception e) {
+            throw ApiException.badRequest("Не удалось сохранить изображение");
+        }
+        ChatMessage msg = new ChatMessage();
+        msg.setConversation(mine.getConversation());
+        msg.setSender(me);
+        msg.setContent(caption != null ? caption.strip() : "");
+        msg.setImagePath(path);
+        return persistAndBroadcast(convId, mine, msg);
+    }
+
+    /**
+     * Поделиться карточкой энергетика или отзывом: либо в существующую беседу (conversationId),
+     * либо личным сообщением получателю (recipientUserId — найдём/создадим личку).
+     */
+    @Transactional
+    public ChatMessageDto share(User me, Long conversationId, Long recipientUserId, Long drinkId, Long reviewId) {
+        if (drinkId == null && reviewId == null) throw ApiException.badRequest("Нечего отправить");
+        Long convId;
+        if (conversationId != null) {
+            convId = conversationId;
+        } else if (recipientUserId != null) {
+            convId = getOrCreateDirect(me, recipientUserId).getId();
+        } else {
+            throw ApiException.badRequest("Не указан получатель");
+        }
+        ConversationMember mine = requireMember(convId, me.getId());
+        requireWritable(convId, me);
+
+        ChatMessage msg = new ChatMessage();
+        msg.setConversation(mine.getConversation());
+        msg.setSender(me);
+        msg.setContent("");
+        if (drinkId != null) msg.setSharedDrinkId(drinkId);
+        else msg.setSharedReviewId(reviewId);
+        return persistAndBroadcast(convId, mine, msg);
+    }
+
+    /** Беседы с аккаунтом «Система» — только для чтения. */
+    private void requireWritable(Long convId, User me) {
+        if (!me.isSystem() && memberRepo.hasSystemMember(convId)) {
+            throw ApiException.forbidden("Системные уведомления — отвечать нельзя");
+        }
+    }
+
+    /** Сохраняет сообщение, двигает беседу вверх, помечает своё прочитанным и рассылает участникам. */
+    private ChatMessageDto persistAndBroadcast(Long convId, ConversationMember mine, ChatMessage msg) {
+        messageRepo.save(msg);
+        Conversation c = msg.getConversation();
         c.setLastMessageAt(msg.getCreatedAt());
         conversationRepo.save(c);
         mine.setLastReadAt(msg.getCreatedAt()); // своё сообщение сразу «прочитано»
         memberRepo.save(mine);
 
-        ChatMessageDto dto = ChatMessageDto.from(msg);
+        ChatMessageDto dto = messageDto(msg);
         ChatEventDto ev = ChatEventDto.of("message");
         ev.setConversationId(c.getId());
         ev.setMessage(dto);
@@ -192,6 +258,15 @@ public class ChatService {
             send(m.getUser().getUsername(), ev);
         }
         return dto;
+    }
+
+    private String extFromContentType(String ct) {
+        return switch (ct.toLowerCase()) {
+            case "image/png" -> ".png";
+            case "image/webp" -> ".webp";
+            case "image/gif" -> ".gif";
+            default -> ".jpg";
+        };
     }
 
     @Transactional
@@ -251,7 +326,7 @@ public class ChatService {
         // живая доставка как у обычного сообщения: у адресата всплывёт беседа и +1 непрочитанное
         ChatEventDto ev = ChatEventDto.of("message");
         ev.setConversationId(c.getId());
-        ev.setMessage(ChatMessageDto.from(msg));
+        ev.setMessage(messageDto(msg));
         for (ConversationMember m : memberRepo.findByConversationId(c.getId())) {
             send(m.getUser().getUsername(), ev);
         }
@@ -301,6 +376,46 @@ public class ChatService {
         messagingTemplate.convertAndSendToUser(username, QUEUE, event);
     }
 
+    /** DTO сообщения с обогащением: превью расшаренного энергетика/отзыва (если есть). */
+    private ChatMessageDto messageDto(ChatMessage m) {
+        ChatMessageDto dto = ChatMessageDto.from(m);
+        if (m.getSharedDrinkId() != null) dto.setSharedDrink(buildSharedDrink(m.getSharedDrinkId()));
+        if (m.getSharedReviewId() != null) dto.setSharedReview(buildSharedReview(m.getSharedReviewId()));
+        return dto;
+    }
+
+    /** Превью энергетика (имя/бренд/обложка/рейтинг). null — если энергетик удалён. */
+    private ChatMessageDto.SharedDrinkDto buildSharedDrink(Long drinkId) {
+        try {
+            DrinkResponseDto d = drinkService.getById(drinkId);
+            ChatMessageDto.SharedDrinkDto s = new ChatMessageDto.SharedDrinkDto();
+            s.setId(d.getId());
+            s.setName(d.getName());
+            s.setBrand(d.getBrand());
+            s.setCoverUrl(d.getCoverUrl());
+            s.setAverageRating(d.getAverageRating());
+            s.setReviewCount(d.getReviewCount());
+            return s;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** Превью отзыва (автор/оценка/текст + энергетик). null — если отзыв удалён. */
+    private ChatMessageDto.SharedReviewDto buildSharedReview(Long reviewId) {
+        Review r = reviewRepo.findById(reviewId).orElse(null);
+        if (r == null) return null;
+        ChatMessageDto.SharedReviewDto s = new ChatMessageDto.SharedReviewDto();
+        s.setId(r.getId());
+        s.setDrinkId(r.getDrink().getId());
+        s.setDrinkName(r.getDrink().getName());
+        s.setAuthorName(r.getUser().getDisplayName() != null ? r.getUser().getDisplayName() : r.getUser().getUsername());
+        s.setAuthorAvatarUrl(r.getUser().getAvatarPath());
+        s.setRating(r.getRating());
+        s.setText(r.getText());
+        return s;
+    }
+
     private ConversationDto buildDto(Conversation c, Long meId) {
         List<ConversationMember> members = memberRepo.findByConversationId(c.getId());
 
@@ -313,7 +428,7 @@ public class ChatService {
         dto.setMembers(members.stream().map(ChatMemberDto::from).toList());
 
         ChatMessage last = messageRepo.findTop1ByConversationIdOrderByIdDesc(c.getId());
-        dto.setLastMessage(last != null ? ChatMessageDto.from(last) : null);
+        dto.setLastMessage(last != null ? messageDto(last) : null);
 
         ConversationMember mine = members.stream()
             .filter(m -> m.getUser().getId().equals(meId)).findFirst().orElse(null);

@@ -7,6 +7,7 @@ import {
 import RatingStars from "./RatingStars";
 import Avatar from "./Avatar";
 import BanModal from "./BanModal";
+import ShareControl from "./ShareControl";
 
 export default function ReviewSection({ drinkId }) {
   const navigate = useNavigate();
@@ -163,6 +164,7 @@ export default function ReviewSection({ drinkId }) {
                         onClick={() => handleAdminDelete(r.id)}>×</button>
                     </span>
                   )}
+                  <ShareControl reviewId={r.id} className="review-share" />
                 </div>
                 {r.text && <div className="review-text">{r.text}</div>}
               </div>

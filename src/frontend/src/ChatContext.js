@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
 import {
   isAuthenticated, fetchMe,
-  fetchChats, fetchChatMessages, sendChatMessage, markChatRead,
+  fetchChats, fetchChatMessages, sendChatMessage, sendChatImage, markChatRead,
   openDirectChat, createGroupChat, addChatMembers, leaveChat,
 } from "./services/api";
 import { createChatSocket } from "./services/chatSocket";
@@ -156,17 +156,18 @@ export function ChatProvider({ children }) {
     }
   }, [loadMessages, markActiveRead]);
 
-  const send = useCallback((cid, content) => {
-    return sendChatMessage(cid, content).then((m) => {
-      setMessages((prev) => {
-        const l = prev[cid];
-        if (l && !l.some((x) => x.id === m.id)) return { ...prev, [cid]: [...l, m] };
-        return prev;
-      });
-      setConversations((prev) => sortConvs(prev.map((c) => (c.id === cid ? { ...c, lastMessage: m, lastMessageAt: m.createdAt } : c))));
-      return m;
+  const applySent = useCallback((cid, m) => {
+    setMessages((prev) => {
+      const l = prev[cid];
+      if (l && !l.some((x) => x.id === m.id)) return { ...prev, [cid]: [...l, m] };
+      return prev;
     });
+    setConversations((prev) => sortConvs(prev.map((c) => (c.id === cid ? { ...c, lastMessage: m, lastMessageAt: m.createdAt } : c))));
+    return m;
   }, []);
+
+  const send = useCallback((cid, content) => sendChatMessage(cid, content).then((m) => applySent(cid, m)), [applySent]);
+  const sendImage = useCallback((cid, file) => sendChatImage(cid, file).then((m) => applySent(cid, m)), [applySent]);
 
   const openDirect = useCallback((userId) => openDirectChat(userId).then((conv) => { upsertConversation(conv); return conv; }), [upsertConversation]);
   const createGroup = useCallback((title, ids) => createGroupChat(title, ids).then((conv) => { upsertConversation(conv); return conv; }), [upsertConversation]);
@@ -182,7 +183,7 @@ export function ChatProvider({ children }) {
 
   const value = {
     me, connected, conversations, messages, typing, unreadTotal,
-    refresh, loadMessages, loadMore, setActive, send,
+    refresh, loadMessages, loadMore, setActive, send, sendImage,
     openDirect, createGroup, addMembers, leave, sendTyping,
   };
 

@@ -13,6 +13,13 @@ public class ChatMessageDto {
     private String content;
     private Instant createdAt;
 
+    /** Вложение-картинка (публичный путь), иначе null. */
+    private String imageUrl;
+    /** Расшаренный энергетик (превью), иначе null. Заполняется в ChatService. */
+    private SharedDrinkDto sharedDrink;
+    /** Расшаренный отзыв (превью), иначе null. Заполняется в ChatService. */
+    private SharedReviewDto sharedReview;
+
     public static ChatMessageDto from(ChatMessage m) {
         ChatMessageDto dto = new ChatMessageDto();
         dto.setId(m.getId());
@@ -20,6 +27,30 @@ public class ChatMessageDto {
         dto.setSender(UserBriefDto.from(m.getSender()));
         dto.setContent(m.getContent());
         dto.setCreatedAt(m.getCreatedAt());
+        dto.setImageUrl(m.getImagePath());
         return dto;
+    }
+
+    /** Лёгкое превью энергетика для карточки в чате. */
+    @Data
+    public static class SharedDrinkDto {
+        private Long id;
+        private String name;
+        private String brand;
+        private String coverUrl;
+        private double averageRating;
+        private int reviewCount;
+    }
+
+    /** Лёгкое превью отзыва для карточки в чате. */
+    @Data
+    public static class SharedReviewDto {
+        private Long id;
+        private Long drinkId;
+        private String drinkName;
+        private String authorName;
+        private String authorAvatarUrl;
+        private int rating;
+        private String text;
     }
 }
