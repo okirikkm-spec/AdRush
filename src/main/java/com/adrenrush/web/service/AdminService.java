@@ -124,6 +124,7 @@ public class AdminService {
         int reviews = reviewRepository.countByUserId(userId);
         reviewRepository.deleteByUserId(userId);
         photoRepository.detachUploader(userId);
+        chatService.purgeUser(userId); // убрать из чатов (FK: сообщения/участие/созданные беседы)
         userRepository.delete(u);
         auditService.record(actor, AuditAction.DELETE_USER, AuditTargetType.USER, userId, username,
             "Аккаунт удалён из БД" + (reviews > 0 ? " · вместе с отзывами: " + reviews : ""));

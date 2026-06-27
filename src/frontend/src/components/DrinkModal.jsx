@@ -5,6 +5,7 @@ import { useSwipeToClose } from "../hooks/useSwipeToClose";
 import PhotoGallery from "./PhotoGallery";
 import ReviewSection from "./ReviewSection";
 import CoverFramerModal from "./CoverFramerModal";
+import ShareControl from "./ShareControl";
 
 /**
  * Карточка энергетика во всплывающем окне — заменяет отдельную страницу.
@@ -117,7 +118,10 @@ export default function DrinkModal({ drinkId, summary, onClose, onChanged }) {
               <input className="input" value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} autoFocus />
             </div>
           ) : (
-            <h2 className="modal-title" style={{ marginBottom: 6 }}>{drink?.name || summary?.name || "…"}</h2>
+            <div className="modal-detail-titlebar">
+              <h2 className="modal-title">{drink?.name || summary?.name || "…"}</h2>
+              <ShareControl drinkId={drinkId} className="modal-detail-share" />
+            </div>
           )}
 
           {drink?.brand && !editing && (

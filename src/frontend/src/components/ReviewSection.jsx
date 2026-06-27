@@ -1,13 +1,14 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   fetchReviews, fetchRating, submitReview, deleteMyReview, isAuthenticated,
   fetchMe, deleteReviewAsAdmin, warnUser,
 } from "../services/api";
 import RatingStars from "./RatingStars";
+import RatingSlider from "./RatingSlider";
 import Avatar from "./Avatar";
 import BanModal from "./BanModal";
-import ShareControl from "./ShareControl";
+import { ShareModal } from "./ShareControl";
 
 export default function ReviewSection({ drinkId }) {
   const navigate = useNavigate();
@@ -110,7 +111,7 @@ export default function ReviewSection({ drinkId }) {
         {authed ? (
           <div className="review-form">
             <div className="review-form-row">
-              <RatingStars value={myRating} onRate={setMyRating} size={26} showValue />
+              <RatingSlider value={myRating} onRate={setMyRating} />
             </div>
             <div className="input-group">
               <textarea
@@ -154,17 +155,13 @@ export default function ReviewSection({ drinkId }) {
                   <Link to={`/user/${r.userId}`} className="review-author">{r.userDisplayName}</Link>
                   <span className="review-rating">★ {r.rating}/10</span>
                   <span className="review-date">{formatDate(r.updatedAt)}</span>
-                  {isAdmin && !r.mine && (
-                    <span className="review-mod">
-                      <button className="review-mod-btn" title="Предупредить автора"
-                        onClick={() => handleWarnAuthor(r)}>⚠</button>
-                      <button className="review-mod-btn" title="Забанить автора"
-                        onClick={() => setBanTarget({ id: r.userId, displayName: r.userDisplayName, avatarUrl: r.userAvatarUrl })}>🔨</button>
-                      <button className="review-mod-btn review-mod-del" title="Удалить отзыв (с причиной)"
-                        onClick={() => handleAdminDelete(r.id)}>×</button>
-                    </span>
-                  )}
-                  <ShareControl reviewId={r.id} className="review-share" />
+                  <ReviewActions
+                    review={r}
+                    isAdmin={isAdmin}
+                    onWarn={handleWarnAuthor}
+                    onBan={(rv) => setBanTarget({ id: rv.userId, displayName: rv.userDisplayName, avatarUrl: rv.userAvatarUrl })}
+                    onDelete={handleAdminDelete}
+                  />
                 </div>
                 {r.text && <div className="review-text">{r.text}</div>}
               </div>
@@ -178,6 +175,67 @@ export default function ReviewSection({ drinkId }) {
           onDone={() => { setBanTarget(null); load(); }} />
       )}
     </>
+  );
+}
+
+/**
+ * Меню «⋮» справа сверху отзыва: все действия в одном месте —
+ * «Переслать» (всем авторизованным) + модерация (предупредить/забанить/удалить) для админа.
+ */
+function ReviewActions({ review, isAdmin, onWarn, onBan, onDelete }) {
+  const [open, setOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const ref = useRef(null);
+  const authed = isAuthenticated();
+  const adminActions = isAdmin && !review.mine;
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  if (!authed && !adminActions) return null; // гостям без прав — меню не нужно
+
+  return (
+    <div className="share-control review-actions" ref={ref}>
+      <button type="button" className="share-dots" title="Действия"
+        onClick={() => setOpen((v) => !v)} aria-label="Действия">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="12" cy="5" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="12" cy="19" r="2" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="share-menu">
+          {authed && (
+            <button type="button" className="share-menu-item"
+              onClick={() => { setOpen(false); setShareOpen(true); }}>
+              <span aria-hidden>↗</span> Переслать
+            </button>
+          )}
+          {adminActions && (
+            <>
+              <button type="button" className="share-menu-item"
+                onClick={() => { setOpen(false); onWarn(review); }}>
+                <span aria-hidden>⚠</span> Предупредить
+              </button>
+              <button type="button" className="share-menu-item"
+                onClick={() => { setOpen(false); onBan(review); }}>
+                <span aria-hidden>🔨</span> Забанить
+              </button>
+              <button type="button" className="share-menu-item danger"
+                onClick={() => { setOpen(false); onDelete(review.id); }}>
+                <span aria-hidden>×</span> Удалить отзыв
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {shareOpen && <ShareModal reviewId={review.id} onClose={() => setShareOpen(false)} />}
+    </div>
   );
 }
 

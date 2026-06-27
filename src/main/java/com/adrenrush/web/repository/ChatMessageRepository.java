@@ -20,6 +20,18 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
     @Query("DELETE FROM ChatMessage m WHERE m.conversation.id = :conversationId")
     void deleteByConversationId(@Param("conversationId") Long conversationId);
 
+    /** Удалить все сообщения пользователя (при удалении аккаунта). */
+    @Modifying
+    @Transactional
+    @Query("DELETE FROM ChatMessage m WHERE m.sender.id = :userId")
+    void deleteBySenderId(@Param("userId") Long userId);
+
+    /** Удалить все сообщения перечисленных бесед. */
+    @Modifying
+    @Transactional
+    @Query("DELETE FROM ChatMessage m WHERE m.conversation.id IN :ids")
+    void deleteByConversationIds(@Param("ids") List<Long> ids);
+
     List<ChatMessage> findByConversationIdOrderByIdDesc(Long conversationId, Pageable pageable);
 
     List<ChatMessage> findByConversationIdAndIdLessThanOrderByIdDesc(Long conversationId, Long beforeId, Pageable pageable);

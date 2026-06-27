@@ -1,6 +1,5 @@
 import { mediaUrl } from "../services/api";
 import { coverStyle } from "../utils/coverStyle";
-import ShareControl from "./ShareControl";
 
 const SCORES = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
 
@@ -52,8 +51,6 @@ export default function DrinkCard({ drink, rank, onClick, ratingOpen, onRatingTo
   return (
     <div className={`drink-card ${rankClass} ${ratingOpen ? "info-open" : ""}`} onClick={onClick}>
       <div className={`drink-rank ${rankClass}`}>{RANK_LABELS[rank] || rank}</div>
-
-      <ShareControl drinkId={drink.id} className="drink-card-share" />
 
 
       {cover ? (

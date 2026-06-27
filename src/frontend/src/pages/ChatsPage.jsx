@@ -447,6 +447,13 @@ export default function ChatsPage() {
   const activeId = id ? Number(id) : null;
   const activeConv = chat?.conversations.find((c) => c.id === activeId) || null;
 
+  // чат занимает весь экран — запрещаем прокрутку страницы (особенно на мобильных)
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
   // отметить активную беседу + подгрузить сообщения
   useEffect(() => {
     if (activeId) chat?.setActive(activeId);

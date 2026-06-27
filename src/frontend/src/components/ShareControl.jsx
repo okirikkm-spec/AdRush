@@ -51,7 +51,7 @@ export default function ShareControl({ drinkId, reviewId, className = "" }) {
   );
 }
 
-function ShareModal({ drinkId, reviewId, onClose }) {
+export function ShareModal({ drinkId, reviewId, onClose }) {
   const navigate = useNavigate();
   const chat = useChat();
   const meId = chat?.me?.id;

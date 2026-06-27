@@ -41,6 +41,15 @@
 
 html { scrollbar-width: thin; scrollbar-color: var(--surface-3) transparent; }
 
+/* Скруглённые тонкие полосы прокрутки — в т.ч. горизонтальные (галерея миниатюр, ленты) */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--surface-3); border-radius: 100px;
+  border: 2px solid transparent; background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
+
 body {
   background: var(--bg);
   color: var(--text);
@@ -446,11 +455,10 @@ a.mini-review-name:hover { color: var(--accent); }
 .modal-detail { max-width: 680px; position: relative; }
 .modal-detail-body { flex: 1; min-height: 0; }
 .modal-detail .gallery { margin-bottom: 18px; }
-.modal-close-float {
-  position: absolute; top: 12px; right: 12px; z-index: 5;
-  background: rgba(0, 0, 0, 0.5); color: #fff;
-}
-.modal-close-float:hover { background: rgba(0, 0, 0, 0.72); color: #fff; }
+/* «⋮» энергетика — в одной строке с названием, аккуратно вписан в карточку */
+.modal-detail-titlebar { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.modal-detail-titlebar .modal-title { margin-bottom: 0; }
+.modal-detail-share { flex-shrink: 0; margin-top: 3px; }
 .modal-detail-foot {
   display: flex; justify-content: flex-end; gap: 10px;
   padding: 12px 22px; border-top: 1px solid var(--border); background: var(--surface);
@@ -553,6 +561,42 @@ a.mini-review-name:hover { color: var(--accent); }
 .star.readonly { cursor: default; }
 .star.readonly:hover { transform: none; }
 .stars-value { margin-left: 8px; font-weight: 700; font-size: 14px; }
+
+/* ─── Ввод оценки «пилюлей» (в цвет темы сайта, цифры + перетаскивание) ─── */
+.rate-slider-wrap { display: flex; align-items: center; gap: 14px; width: 100%; }
+.rate-slider {
+  position: relative; flex: 1; min-width: 0; height: 44px;
+  border-radius: 100px; background: var(--surface-3);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.28);
+  cursor: pointer; touch-action: none; user-select: none;
+  transition: box-shadow 0.15s;
+}
+.rate-slider:focus-visible {
+  outline: none; box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.28), 0 0 0 3px var(--accent-dim);
+}
+.rate-slider-fill {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 60%, #000), var(--accent));
+  border-radius: 100px;
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--accent) 40%, transparent);
+  transition: width 0.12s ease;
+}
+.rate-slider-nodes {
+  position: relative; height: 100%;
+  display: flex; align-items: center; justify-content: space-between; padding: 0 8px;
+}
+.rate-node {
+  position: relative; flex: 1 1 0; height: 100%; pointer-events: none;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 800; color: var(--text-muted); transition: color 0.12s;
+}
+.rate-node.on { color: rgba(255, 255, 255, 0.96); }
+.rate-node-num { display: flex; align-items: center; justify-content: center; }
+.rate-node.current .rate-node-num {
+  font-size: 16px; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+}
+.rate-slider-value { flex-shrink: 0; min-width: 50px; font-size: 22px; font-weight: 800; color: var(--accent); }
+.rate-slider-max { font-size: 13px; font-weight: 700; color: var(--text-faint); }
 
 /* ─────────────── Review form & list ─────────────── */
 .review-form {
@@ -1208,13 +1252,6 @@ a.mini-review-name:hover { color: var(--accent); }
 }
 .share-menu-item:hover { background: var(--surface-2); color: var(--accent); }
 
-/* Расположение ⋮ на карточке энергетика и в отзыве */
-.drink-card { position: relative; }
-.drink-card-share { position: absolute; top: 10px; right: 10px; z-index: 5; opacity: 0; transition: opacity 0.15s; }
-.drink-card:hover .drink-card-share, .share-control:focus-within { opacity: 1; }
-.review-share { margin-left: 6px; }
-@media (hover: none) { .drink-card-share { opacity: 1; } }
-
 /* Модалка «Поделиться» */
 .share-list { display: flex; flex-direction: column; gap: 5px; margin-top: 12px; max-height: 340px; overflow-y: auto; }
 .share-done { text-align: center; padding: 22px 6px; }
@@ -1224,6 +1261,13 @@ a.mini-review-name:hover { color: var(--accent); }
   background: var(--success); box-shadow: 0 0 0 6px color-mix(in srgb, var(--success) 20%, transparent);
 }
 .share-done-text { font-weight: 600; }
+
+/* «⋮» со всеми действиями отзыва — справа сверху комментария */
+.review-actions { margin-left: 6px; flex-shrink: 0; }
+
+/* Опасный пункт меню (удаление отзыва) */
+.share-menu-item.danger { color: var(--error); }
+.share-menu-item.danger:hover { background: var(--accent-dim); color: var(--error); }
 
 /* Мобильная адаптация: один экран за раз */
 @media (max-width: 760px) {

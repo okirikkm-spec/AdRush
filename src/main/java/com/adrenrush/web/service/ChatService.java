@@ -166,6 +166,28 @@ public class ChatService {
         notifyConversation(c, null);
     }
 
+    /**
+     * Полная чистка чатов пользователя перед удалением аккаунта (иначе FK на chat_messages /
+     * conversation_members / conversations.created_by не дадут удалить): убираем из всех бесед,
+     * личные диалоги и опустевшие группы удаляем целиком, у выживших групп обнуляем создателя.
+     */
+    @Transactional
+    public void purgeUser(Long userId) {
+        // 1) только id бесед на снос (без загрузки сущностей, чтобы не держать ссылки на удаляемого User)
+        List<Long> toDelete = memberRepo.findConversationIdsToPurge(userId);
+        // 2) убрать участие и сообщения пользователя везде (в т.ч. в выживших группах) — bulk
+        memberRepo.deleteByUserId(userId);
+        messageRepo.deleteBySenderId(userId);
+        // 3) снести помеченные беседы целиком в FK-безопасном порядке: сообщения → участники → беседа
+        if (!toDelete.isEmpty()) {
+            messageRepo.deleteByConversationIds(toDelete);
+            memberRepo.deleteByConversationIds(toDelete);
+            conversationRepo.deleteByIds(toDelete);
+        }
+        // 4) у выживших бесед, созданных пользователем, обнулить создателя (иначе FK не даст удалить юзера)
+        conversationRepo.clearCreatedBy(userId);
+    }
+
     /* ─────────────── Сообщения / статусы ─────────────── */
 
     @Transactional
