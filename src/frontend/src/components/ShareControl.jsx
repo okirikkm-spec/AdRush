@@ -17,8 +17,9 @@ export default function ShareControl({ drinkId, reviewId, className = "" }) {
   useEffect(() => {
     if (!menuOpen) return;
     const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setMenuOpen(false); };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
+    // capture-фаза: не блокируется stopPropagation у .drink-page (он в фазе всплытия)
+    document.addEventListener("mousedown", onDoc, true);
+    return () => document.removeEventListener("mousedown", onDoc, true);
   }, [menuOpen]);
 
   if (!isAuthenticated()) return null;

@@ -10,7 +10,7 @@ import Avatar from "./Avatar";
 import BanModal from "./BanModal";
 import { ShareModal } from "./ShareControl";
 
-export default function ReviewSection({ drinkId }) {
+export default function ReviewSection({ drinkId, showSummary = true, onChanged }) {
   const navigate = useNavigate();
   const authed = isAuthenticated();
 
@@ -52,6 +52,7 @@ export default function ReviewSection({ drinkId }) {
     try {
       await deleteReviewAsAdmin(reviewId, reason);
       await load();
+      onChanged?.();
     } catch (e) {
       setError(e.message);
     }
@@ -75,6 +76,7 @@ export default function ReviewSection({ drinkId }) {
     try {
       await submitReview(drinkId, myRating, myText);
       await load();
+      onChanged?.();
     } catch (e) {
       setError(e.message);
     } finally {
@@ -89,6 +91,7 @@ export default function ReviewSection({ drinkId }) {
       setMyRating(0);
       setMyText("");
       await load();
+      onChanged?.();
     } catch (e) {
       setError(e.message);
     } finally {
@@ -98,13 +101,15 @@ export default function ReviewSection({ drinkId }) {
 
   return (
     <>
-      <div className="rating-summary">
-        <div className="rating-big">{rating.average > 0 ? rating.average.toFixed(1) : "—"}</div>
-        <div>
-          <RatingStars value={Math.round(rating.average)} readonly size={18} />
-          <div className="meta">Средняя оценка · {rating.count} отзывов</div>
+      {showSummary && (
+        <div className="rating-summary">
+          <div className="rating-big">{rating.average > 0 ? rating.average.toFixed(1) : "—"}</div>
+          <div>
+            <RatingStars value={Math.round(rating.average)} readonly size={18} />
+            <div className="meta">Средняя оценка · {rating.count} отзывов</div>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="section">
         <h3 className="section-title">{hasMine ? "Ваш отзыв" : "Оставить отзыв"}</h3>
@@ -192,8 +197,9 @@ function ReviewActions({ review, isAdmin, onWarn, onBan, onDelete }) {
   useEffect(() => {
     if (!open) return;
     const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
+    // capture-фаза: не блокируется stopPropagation у .drink-page (фаза всплытия)
+    document.addEventListener("mousedown", onDoc, true);
+    return () => document.removeEventListener("mousedown", onDoc, true);
   }, [open]);
 
   if (!authed && !adminActions) return null; // гостям без прав — меню не нужно

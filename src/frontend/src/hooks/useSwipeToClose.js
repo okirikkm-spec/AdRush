@@ -39,7 +39,7 @@ export function useSwipeToClose(onClose, { threshold = 80 } = {}) {
       for (let n = target; n && n !== el; n = n.parentElement) {
         const tag = n.tagName;
         if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || tag === "BUTTON" || tag === "A") return true;
-        if (n.classList && (n.classList.contains("modal-overlay") || n.classList.contains("gallery-thumbs"))) return true;
+        if (n.classList && (n.classList.contains("modal-overlay") || n.classList.contains("gallery-thumbs") || n.classList.contains("drink-hero"))) return true;
       }
       return false;
     };
