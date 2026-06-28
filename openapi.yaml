@@ -1,0 +1,2058 @@
+openapi: 3.0.3
+info:
+  title: AdrenRush API
+  version: "1.0.0"
+  description: >
+    REST API сайта рейтинга энергетиков **AdrenRush**.
+
+    Аутентификация — JWT в заголовке `Authorization: Bearer <token>`.
+    Токен выдаётся при регистрации/входе (`/api/auth/register`, `/api/auth/login`).
+
+    Уровни доступа (см. `SecurityConfig`):
+    - `GET /api/drinks/**`, `GET /api/users/**`, `GET /media/**`, `/api/auth/**` — без авторизации;
+    - `/api/admin/**` — только роль `ADMIN`;
+    - изменяющие операции над напитками/фото — требуют токен и проверяются на роль `ADMIN` в контроллере (иначе `403`);
+    - остальные эндпоинты требуют валидный токен.
+
+    Ошибки бизнес-логики возвращаются как `{"error": "..."}` с соответствующим HTTP-статусом.
+
+servers:
+  - url: http://localhost:8080
+    description: Локальная разработка
+  - url: https://adrenrush.ru
+    description: Боевой сервер
+
+tags:
+  - name: Auth
+    description: Регистрация, вход, текущий пользователь, профиль, 2FA
+  - name: Users
+    description: Публичные профили пользователей
+  - name: Drinks
+    description: Каталог энергетиков, фото, парсеры (часть — только для админа)
+  - name: Reviews
+    description: Отзывы и оценки энергетиков
+  - name: Chats
+    description: Личные и групповые беседы, сообщения, шаринг
+  - name: Admin
+    description: Модерация (только роль ADMIN)
+  - name: Media
+    description: Отдача пользовательских медиа
+
+security:
+  - bearerAuth: []
+
+paths:
+
+  # ────────────────────────────── AUTH ──────────────────────────────
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: Регистрация нового пользователя
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '200':
+          description: Пользователь создан, выдан токен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Вход по логину и паролю
+      description: >
+        При включённой 2FA, если `code` не передан или неверен, возвращается `401`
+        с телом `{ "error": "...", "requires2fa": true }`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Успешный вход, выдан токен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          description: Неверные учётные данные либо требуется 2FA
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/Error'
+                  - $ref: '#/components/schemas/TwoFactorError'
+
+  /api/auth/recover:
+    post:
+      tags: [Auth]
+      summary: Восстановление пароля по коду из приложения-аутентификатора
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecoverRequest'
+      responses:
+        '200':
+          description: Пароль изменён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      summary: Текущий пользователь
+      responses:
+        '200':
+          description: Данные текущего пользователя
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponseDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    put:
+      tags: [Auth]
+      summary: Обновить отображаемое имя
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          description: Обновлённый профиль
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponseDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/auth/me/avatar:
+    post:
+      tags: [Auth]
+      summary: Загрузить аватар
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Файл изображения (image/*)
+      responses:
+        '200':
+          description: Профиль с новым аватаром
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponseDto'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '507':
+          description: Не удалось сохранить файл в хранилище
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/auth/me/password:
+    post:
+      tags: [Auth]
+      summary: Сменить пароль
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '200':
+          description: Пароль изменён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/auth/me/privacy:
+    post:
+      tags: [Auth]
+      summary: Включить/выключить приватность профиля
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrivacyRequest'
+      responses:
+        '200':
+          description: Обновлённый профиль
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponseDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/auth/2fa/setup:
+    post:
+      tags: [Auth]
+      summary: Сгенерировать секрет 2FA (TOTP)
+      description: Возвращает секрет, otpauth-ссылку и QR в виде data-URL. Подтверждается отдельным шагом `/2fa/enable`.
+      responses:
+        '200':
+          description: Данные для настройки приложения-аутентификатора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TwoFactorSetupResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/auth/2fa/enable:
+    post:
+      tags: [Auth]
+      summary: Подтвердить и включить 2FA
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TwoFactorCodeRequest'
+      responses:
+        '200':
+          description: 2FA включена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+              example: { status: enabled }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/auth/2fa/disable:
+    post:
+      tags: [Auth]
+      summary: Отключить 2FA
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TwoFactorCodeRequest'
+      responses:
+        '200':
+          description: 2FA отключена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+              example: { status: disabled }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ────────────────────────────── USERS ─────────────────────────────
+  /api/users/{id}:
+    get:
+      tags: [Users]
+      summary: Публичный профиль пользователя
+      description: >
+        Отзывы и тир-лист видны, если профиль не закрыт, либо запрашивает сам владелец или администратор.
+        Авторизация необязательна, но влияет на видимость.
+      security:
+        - bearerAuth: []
+        - {}
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: Публичный профиль
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicProfile'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ────────────────────────────── DRINKS ────────────────────────────
+  /api/drinks:
+    get:
+      tags: [Drinks]
+      summary: Список энергетиков (по убыванию оценки)
+      description: Краткие карточки для главной (без полной галереи).
+      security:
+        - bearerAuth: []
+        - {}
+      responses:
+        '200':
+          description: Список энергетиков
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DrinkResponseDto'
+    post:
+      tags: [Drinks]
+      summary: Создать карточку энергетика (только админ)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDrinkRequest'
+      responses:
+        '200':
+          description: Созданный энергетик
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DrinkResponseDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/drinks/{id}:
+    get:
+      tags: [Drinks]
+      summary: Карточка энергетика с галереей
+      security:
+        - bearerAuth: []
+        - {}
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: Полная карточка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DrinkResponseDto'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Drinks]
+      summary: Редактировать энергетик (только админ)
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDrinkRequest'
+      responses:
+        '200':
+          description: Обновлённый энергетик
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DrinkResponseDto'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Drinks]
+      summary: Удалить энергетик (только админ)
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: Удалён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/drinks/{id}/photos:
+    post:
+      tags: [Drinks]
+      summary: Добавить фото в галерею файлом (только админ)
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Энергетик с обновлённой галереей
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DrinkResponseDto'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/drinks/{id}/photos/url:
+    post:
+      tags: [Drinks]
+      summary: Добавить фото по ссылке (скачивается в хранилище, только админ)
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddPhotoUrlRequest'
+      responses:
+        '200':
+          description: Энергетик с обновлённой галереей
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DrinkResponseDto'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/drinks/{id}/photos/order:
+    put:
+      tags: [Drinks]
+      summary: Изменить порядок фотографий (первое = обложка, только админ)
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReorderPhotosRequest'
+      responses:
+        '200':
+          description: Энергетик с переупорядоченной галереей
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DrinkResponseDto'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/drinks/{id}/photos/{photoId}:
+    delete:
+      tags: [Drinks]
+      summary: Удалить фото из галереи (только админ)
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+        - name: photoId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Энергетик с обновлённой галереей
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DrinkResponseDto'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/drinks/{id}/cover:
+    put:
+      tags: [Drinks]
+      summary: Настроить кадрирование обложки (только админ)
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCoverRequest'
+      responses:
+        '200':
+          description: Энергетик с обновлённым кадрированием
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DrinkResponseDto'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/drinks/media/optimize:
+    post:
+      tags: [Drinks]
+      summary: Оптимизировать медиа (только админ)
+      description: >
+        Внешние картинки скачиваются в наше хранилище, для фото без превью оно достраивается.
+        Сетевые загрузки могут занять время — ответ приходит по завершении.
+      responses:
+        '200':
+          description: Итог оптимизации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaOptimizeResult'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/drinks/parse/sources:
+    get:
+      tags: [Drinks]
+      summary: Бренды с авто-парсером каталога (только админ)
+      description: Monster сюда не входит — его каталог загружается вручную через `/api/drinks/parse/monster`.
+      responses:
+        '200':
+          description: Список брендов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                example: ["Adrenaline Rush", "Red Bull"]
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/drinks/parse:
+    post:
+      tags: [Drinks]
+      summary: Запустить авто-парсеры для выбранных брендов (только админ)
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ParseRequest'
+      responses:
+        '200':
+          description: Сколько карточек создано/обновлено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParseResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/drinks/parse/monster:
+    post:
+      tags: [Drinks]
+      summary: Парсинг каталога Monster из загруженного HTML (только админ)
+      description: >
+        Сайт Monster за Cloudflare недоступен серверу напрямую, поэтому администратор сохраняет
+        страницу каталога в браузере и загружает HTML сюда.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: HTML-файл каталога Monster
+                reparse:
+                  type: boolean
+                  default: false
+                  description: true — обновить и существующие карточки
+      responses:
+        '200':
+          description: Сколько карточек создано/обновлено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParseResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ────────────────────────────── REVIEWS ───────────────────────────
+  /api/drinks/{drinkId}/reviews:
+    get:
+      tags: [Reviews]
+      summary: Список отзывов на энергетик
+      security:
+        - bearerAuth: []
+        - {}
+      parameters:
+        - $ref: '#/components/parameters/PathDrinkId'
+      responses:
+        '200':
+          description: Отзывы
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReviewResponseDto'
+    post:
+      tags: [Reviews]
+      summary: Поставить/обновить оценку и отзыв
+      description: Одна оценка на пользователя; повторный вызов обновляет существующий отзыв.
+      parameters:
+        - $ref: '#/components/parameters/PathDrinkId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertReviewRequest'
+      responses:
+        '200':
+          description: Сохранённый отзыв
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewResponseDto'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/drinks/{drinkId}/reviews/me:
+    delete:
+      tags: [Reviews]
+      summary: Удалить свой отзыв
+      parameters:
+        - $ref: '#/components/parameters/PathDrinkId'
+      responses:
+        '204':
+          description: Отзыв удалён
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/drinks/{drinkId}/rating:
+    get:
+      tags: [Reviews]
+      summary: Сводка оценок энергетика
+      description: '`myRating` = 0, если пользователь не оценивал или не авторизован.'
+      security:
+        - bearerAuth: []
+        - {}
+      parameters:
+        - $ref: '#/components/parameters/PathDrinkId'
+      responses:
+        '200':
+          description: Средняя оценка, число оценок, своя оценка
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RatingInfo'
+
+  # ────────────────────────────── CHATS ─────────────────────────────
+  /api/chats:
+    get:
+      tags: [Chats]
+      summary: Список бесед текущего пользователя
+      responses:
+        '200':
+          description: Беседы
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ConversationDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/chats/unread-count:
+    get:
+      tags: [Chats]
+      summary: Общее число непрочитанных сообщений
+      responses:
+        '200':
+          description: Счётчик непрочитанного
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/chats/users/search:
+    get:
+      tags: [Chats]
+      summary: Поиск пользователей для начала беседы
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Строка поиска
+      responses:
+        '200':
+          description: Найденные пользователи
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserBriefDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/chats/direct:
+    post:
+      tags: [Chats]
+      summary: Получить или создать личную беседу
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DirectChatRequest'
+      responses:
+        '200':
+          description: Беседа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationDto'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/chats/group:
+    post:
+      tags: [Chats]
+      summary: Создать групповую беседу
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GroupChatRequest'
+      responses:
+        '200':
+          description: Созданная беседа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/chats/share:
+    post:
+      tags: [Chats]
+      summary: Поделиться карточкой энергетика или отзывом
+      description: >
+        Указывается источник (`drinkId` или `reviewId`) и адресат:
+        либо существующая беседа (`conversationId`), либо личное сообщение получателю (`recipientUserId`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShareRequest'
+      responses:
+        '200':
+          description: Беседа и созданное сообщение
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conversationId:
+                    type: integer
+                    format: int64
+                  message:
+                    $ref: '#/components/schemas/ChatMessageDto'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/chats/{id}:
+    get:
+      tags: [Chats]
+      summary: Получить беседу
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: Беседа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/chats/{id}/messages:
+    get:
+      tags: [Chats]
+      summary: Сообщения беседы (с пагинацией)
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+        - name: beforeId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+          description: Вернуть сообщения старше указанного id (для подгрузки истории)
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 40
+      responses:
+        '200':
+          description: Сообщения
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChatMessageDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Chats]
+      summary: Отправить текстовое сообщение
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+      responses:
+        '200':
+          description: Созданное сообщение
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatMessageDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/chats/{id}/messages/image:
+    post:
+      tags: [Chats]
+      summary: Отправить изображение
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                caption:
+                  type: string
+                  description: Подпись к изображению (опционально)
+      responses:
+        '200':
+          description: Созданное сообщение с вложением
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatMessageDto'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/chats/{id}/read:
+    post:
+      tags: [Chats]
+      summary: Отметить беседу прочитанной
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: Отмечено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/chats/{id}/members:
+    post:
+      tags: [Chats]
+      summary: Добавить участников в группу
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddMembersRequest'
+      responses:
+        '200':
+          description: Обновлённая беседа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/chats/{id}/leave:
+    post:
+      tags: [Chats]
+      summary: Покинуть беседу
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: Покинуто
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ────────────────────────────── ADMIN ─────────────────────────────
+  /api/admin/users:
+    get:
+      tags: [Admin]
+      summary: Список всех пользователей (модерация)
+      responses:
+        '200':
+          description: Пользователи
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminUserDto'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/admin/users/{id}/linked:
+    get:
+      tags: [Admin]
+      summary: Связанные аккаунты (по IP/fingerprint)
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: Связанные аккаунты
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminUserDto'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/admin/users/{id}/ban:
+    post:
+      tags: [Admin]
+      summary: Забанить пользователя
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BanRequest'
+      responses:
+        '200':
+          description: Сколько забанено и удалено комментариев
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BanResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/admin/users/{id}/unban:
+    post:
+      tags: [Admin]
+      summary: Разбанить пользователя
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: Разбанен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/admin/users/{id}:
+    delete:
+      tags: [Admin]
+      summary: Удалить пользователя
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: Удалён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/admin/users/{id}/role:
+    post:
+      tags: [Admin]
+      summary: Выдать/снять права администратора (только супер-админ)
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleRequest'
+      responses:
+        '200':
+          description: Роль изменена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/admin/users/{id}/warn:
+    post:
+      tags: [Admin]
+      summary: Отправить предупреждение пользователю
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WarnRequest'
+      responses:
+        '200':
+          description: Отправлено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/admin/reviews/{id}:
+    delete:
+      tags: [Admin]
+      summary: Удалить отзыв (модерация)
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteReviewRequest'
+      responses:
+        '200':
+          description: Удалён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/admin/audit:
+    get:
+      tags: [Admin]
+      summary: Журнал действий модераторов (с фильтрами)
+      parameters:
+        - name: actorId
+          in: query
+          required: false
+          schema: { type: integer, format: int64 }
+          description: Кто совершил действие
+        - name: action
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/AuditAction'
+          description: Тип действия (неизвестное значение игнорируется)
+        - name: targetId
+          in: query
+          required: false
+          schema: { type: integer, format: int64 }
+          description: Над кем совершено действие
+        - name: q
+          in: query
+          required: false
+          schema: { type: string }
+          description: Свободный поиск
+        - name: page
+          in: query
+          required: false
+          schema: { type: integer, default: 0 }
+        - name: size
+          in: query
+          required: false
+          schema: { type: integer, default: 50, maximum: 200 }
+      responses:
+        '200':
+          description: Страница журнала
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditPage'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/admin/audit/actors:
+    get:
+      tags: [Admin]
+      summary: Уникальные акторы журнала (для фильтра)
+      responses:
+        '200':
+          description: Список акторов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                      format: int64
+                      nullable: true
+                      description: null для системных действий
+                    username:
+                      type: string
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ────────────────────────────── MEDIA ─────────────────────────────
+  /media/{key}:
+    get:
+      tags: [Media]
+      summary: Отдать пользовательский медиафайл из хранилища (MinIO)
+      description: Доступно без авторизации. Возвращает `404`, если хранилище не в режиме MinIO или объект не найден.
+      security: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 'Ключ объекта (может содержать слэши, напр. `avatars/12-1700000000.png`)'
+      responses:
+        '200':
+          description: Бинарное содержимое файла
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Файл не найден
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    PathId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    PathDrinkId:
+      name: drinkId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+
+  responses:
+    BadRequest:
+      description: Некорректный запрос
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Требуется авторизация
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Недостаточно прав (или аккаунт заблокирован)
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - $ref: '#/components/schemas/Error'
+              - $ref: '#/components/schemas/BannedError'
+    NotFound:
+      description: Объект не найден
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: Конфликт (например, имя пользователя занято)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+
+    # ── Общие ──
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+      example: { error: "Сообщение об ошибке" }
+
+    TwoFactorError:
+      type: object
+      description: Возвращается при входе, когда требуется код 2FA
+      properties:
+        error:
+          type: string
+        requires2fa:
+          type: boolean
+          example: true
+      required: [error, requires2fa]
+
+    BannedError:
+      type: object
+      description: Возвращается JWT-фильтром, если аккаунт заблокирован
+      properties:
+        error:
+          type: string
+          example: Аккаунт заблокирован
+        reason:
+          type: string
+        bannedUntil:
+          type: string
+          description: ISO-время до которого действует бан, либо пустая строка (бан навсегда)
+      required: [error]
+
+    TokenResponse:
+      type: object
+      properties:
+        token:
+          type: string
+      required: [token]
+
+    StatusResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+      required: [status]
+
+    TwoFactorSetupResponse:
+      type: object
+      properties:
+        secret:
+          type: string
+        otpauthUrl:
+          type: string
+        qrDataUrl:
+          type: string
+          description: QR-код в виде data-URL (base64 PNG)
+
+    RatingInfo:
+      type: object
+      properties:
+        average:
+          type: number
+          format: double
+          description: Средняя оценка, округлённая до 0.1 (0.0, если оценок нет)
+        count:
+          type: integer
+        myRating:
+          type: integer
+          description: Оценка текущего пользователя (0, если нет или не авторизован)
+
+    # ── Пользователи ──
+    UserResponseDto:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        username:
+          type: string
+        displayName:
+          type: string
+        role:
+          $ref: '#/components/schemas/RoleEnum'
+        avatarUrl:
+          type: string
+          nullable: true
+        profilePrivate:
+          type: boolean
+        totpEnabled:
+          type: boolean
+
+    UserBriefDto:
+      type: object
+      description: Краткая карточка пользователя для чатов
+      properties:
+        id:
+          type: integer
+          format: int64
+        username:
+          type: string
+        displayName:
+          type: string
+        avatarUrl:
+          type: string
+          nullable: true
+        system:
+          type: boolean
+          description: Служебный аккаунт «Система» (беседа становится read-only)
+
+    AdminUserDto:
+      type: object
+      description: Карточка пользователя для админ-панели (с приватными полями)
+      properties:
+        id:
+          type: integer
+          format: int64
+        username:
+          type: string
+        displayName:
+          type: string
+        role:
+          $ref: '#/components/schemas/RoleEnum'
+        avatarUrl:
+          type: string
+          nullable: true
+        bannedUntil:
+          type: string
+          format: date-time
+          nullable: true
+        banReason:
+          type: string
+          nullable: true
+        registrationIp:
+          type: string
+          nullable: true
+        lastIp:
+          type: string
+          nullable: true
+        lastFingerprint:
+          type: string
+          nullable: true
+        reviewCount:
+          type: integer
+        linkedCount:
+          type: integer
+        superAdmin:
+          type: boolean
+
+    PublicProfile:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/UserResponseDto'
+        isPrivate:
+          type: boolean
+        canSeeReviews:
+          type: boolean
+        reviews:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReviewResponseDto'
+
+    # ── Напитки ──
+    DrinkResponseDto:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        brand:
+          type: string
+          nullable: true
+        slug:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        coverUrl:
+          type: string
+          nullable: true
+          description: Обложка; в кратком виде — заданная, в полном — url первого фото
+        coverFitCard:
+          type: string
+          nullable: true
+        coverPosCard:
+          type: string
+          nullable: true
+        coverFitModal:
+          type: string
+          nullable: true
+        coverPosModal:
+          type: string
+          nullable: true
+        averageRating:
+          type: number
+          format: double
+        reviewCount:
+          type: integer
+        ratingDistribution:
+          type: object
+          nullable: true
+          description: 'Распределение оценок: балл (1–10) → количество'
+          additionalProperties:
+            type: integer
+          example: { "8": 3, "9": 5, "10": 12 }
+        photos:
+          type: array
+          nullable: true
+          description: Полная галерея (только в карточке по id)
+          items:
+            $ref: '#/components/schemas/PhotoDto'
+
+    PhotoDto:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        url:
+          type: string
+        thumbUrl:
+          type: string
+          nullable: true
+        source:
+          $ref: '#/components/schemas/PhotoSource'
+        uploadedById:
+          type: integer
+          format: int64
+          nullable: true
+
+    # ── Отзывы ──
+    ReviewResponseDto:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        drinkId:
+          type: integer
+          format: int64
+        drinkName:
+          type: string
+        userId:
+          type: integer
+          format: int64
+        userDisplayName:
+          type: string
+        userAvatarUrl:
+          type: string
+          nullable: true
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 10
+        text:
+          type: string
+          nullable: true
+        updatedAt:
+          type: string
+          format: date-time
+        mine:
+          type: boolean
+          description: true, если отзыв принадлежит текущему пользователю
+
+    # ── Чаты ──
+    ConversationDto:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        type:
+          $ref: '#/components/schemas/ConversationType'
+        title:
+          type: string
+          nullable: true
+          description: Имя группы; для DIRECT — null (имя берётся из собеседника)
+        avatarUrl:
+          type: string
+          nullable: true
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatMemberDto'
+        lastMessage:
+          $ref: '#/components/schemas/ChatMessageDto'
+        lastMessageAt:
+          type: string
+          format: date-time
+          nullable: true
+        unreadCount:
+          type: integer
+
+    ChatMemberDto:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/UserBriefDto'
+        owner:
+          type: boolean
+        lastReadAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    ChatMessageDto:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        conversationId:
+          type: integer
+          format: int64
+        sender:
+          $ref: '#/components/schemas/UserBriefDto'
+        content:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        imageUrl:
+          type: string
+          nullable: true
+          description: Публичный путь вложения-картинки
+        sharedDrink:
+          $ref: '#/components/schemas/SharedDrinkDto'
+        sharedReview:
+          $ref: '#/components/schemas/SharedReviewDto'
+
+    SharedDrinkDto:
+      type: object
+      nullable: true
+      description: Лёгкое превью энергетика для карточки в чате
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        brand:
+          type: string
+          nullable: true
+        coverUrl:
+          type: string
+          nullable: true
+        averageRating:
+          type: number
+          format: double
+        reviewCount:
+          type: integer
+
+    SharedReviewDto:
+      type: object
+      nullable: true
+      description: Лёгкое превью отзыва для карточки в чате
+      properties:
+        id:
+          type: integer
+          format: int64
+        drinkId:
+          type: integer
+          format: int64
+        drinkName:
+          type: string
+        authorName:
+          type: string
+        authorAvatarUrl:
+          type: string
+          nullable: true
+        rating:
+          type: integer
+        text:
+          type: string
+          nullable: true
+
+    ChatEventDto:
+      type: object
+      description: >
+        Событие чата, доставляемое по WebSocket (STOMP) в `/user/queue/chat`.
+        Не используется в REST, приведено для справки.
+      properties:
+        kind:
+          type: string
+          enum: [message, typing, read, conversation]
+        conversationId:
+          type: integer
+          format: int64
+        message:
+          $ref: '#/components/schemas/ChatMessageDto'
+        conversation:
+          $ref: '#/components/schemas/ConversationDto'
+        user:
+          $ref: '#/components/schemas/UserBriefDto'
+        lastReadAt:
+          type: string
+          format: date-time
+
+    # ── Аудит ──
+    AuditLogDto:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        actorId:
+          type: integer
+          format: int64
+          nullable: true
+        actorUsername:
+          type: string
+        action:
+          $ref: '#/components/schemas/AuditAction'
+        targetType:
+          allOf:
+            - $ref: '#/components/schemas/AuditTargetType'
+          nullable: true
+        targetId:
+          type: integer
+          format: int64
+          nullable: true
+        targetLabel:
+          type: string
+          nullable: true
+        details:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    AuditPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditLogDto'
+        total:
+          type: integer
+          format: int64
+        page:
+          type: integer
+        size:
+          type: integer
+        totalPages:
+          type: integer
+
+    # ── Результаты операций ──
+    ParseResult:
+      type: object
+      properties:
+        created:
+          type: integer
+        updated:
+          type: integer
+
+    MediaOptimizeResult:
+      type: object
+      properties:
+        downloaded:
+          type: integer
+        thumbnailed:
+          type: integer
+        skipped:
+          type: integer
+        failed:
+          type: integer
+
+    BanResult:
+      type: object
+      properties:
+        banned:
+          type: integer
+        deletedComments:
+          type: integer
+
+    # ── Перечисления ──
+    RoleEnum:
+      type: string
+      enum: [USER, ADMIN, BANNED]
+
+    PhotoSource:
+      type: string
+      enum: [PARSED, USER]
+
+    ConversationType:
+      type: string
+      enum: [DIRECT, GROUP]
+
+    AuditAction:
+      type: string
+      enum:
+        - BAN
+        - UNBAN
+        - DELETE_USER
+        - DELETE_REVIEW
+        - WARN
+        - GRANT_ADMIN
+        - REVOKE_ADMIN
+        - DRINK_CREATE
+        - DRINK_UPDATE
+        - DRINK_DELETE
+
+    AuditTargetType:
+      type: string
+      enum: [USER, DRINK]
+
+    # ── Тела запросов ──
+    RegisterRequest:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+        fingerprint:
+          type: string
+          nullable: true
+          description: Отпечаток устройства (для связывания аккаунтов)
+      required: [username, password]
+
+    LoginRequest:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+        code:
+          type: string
+          nullable: true
+          description: Код 2FA, если включена
+        fingerprint:
+          type: string
+          nullable: true
+      required: [username, password]
+
+    RecoverRequest:
+      type: object
+      properties:
+        username:
+          type: string
+        code:
+          type: string
+          description: Код из приложения-аутентификатора
+        newPassword:
+          type: string
+      required: [username, code, newPassword]
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        displayName:
+          type: string
+
+    ChangePasswordRequest:
+      type: object
+      properties:
+        oldPassword:
+          type: string
+        newPassword:
+          type: string
+          minLength: 4
+      required: [oldPassword, newPassword]
+
+    PrivacyRequest:
+      type: object
+      properties:
+        private:
+          type: boolean
+      required: [private]
+
+    TwoFactorCodeRequest:
+      type: object
+      properties:
+        code:
+          type: string
+      required: [code]
+
+    CreateDrinkRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        brand:
+          type: string
+        description:
+          type: string
+        coverUrl:
+          type: string
+      required: [name]
+
+    UpdateDrinkRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+
+    AddPhotoUrlRequest:
+      type: object
+      properties:
+        url:
+          type: string
+      required: [url]
+
+    ReorderPhotosRequest:
+      type: object
+      properties:
+        order:
+          type: array
+          items:
+            type: integer
+            format: int64
+          description: Идентификаторы фото в желаемом порядке (первое = обложка)
+      required: [order]
+
+    UpdateCoverRequest:
+      type: object
+      description: Параметры кадрирования обложки (CSS object-fit / object-position)
+      properties:
+        coverFitCard:
+          type: string
+        coverPosCard:
+          type: string
+        coverFitModal:
+          type: string
+        coverPosModal:
+          type: string
+
+    ParseRequest:
+      type: object
+      properties:
+        brands:
+          type: array
+          items:
+            type: string
+          description: Бренды из /api/drinks/parse/sources
+        reparse:
+          type: boolean
+          default: false
+          description: false — только новые карточки; true — обновить и существующие
+
+    UpsertReviewRequest:
+      type: object
+      properties:
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 10
+        text:
+          type: string
+          nullable: true
+      required: [rating]
+
+    DirectChatRequest:
+      type: object
+      properties:
+        userId:
+          type: integer
+          format: int64
+      required: [userId]
+
+    GroupChatRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          nullable: true
+        memberIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+
+    SendMessageRequest:
+      type: object
+      properties:
+        content:
+          type: string
+
+    ShareRequest:
+      type: object
+      description: Укажите источник (drinkId или reviewId) и адресат (conversationId или recipientUserId)
+      properties:
+        conversationId:
+          type: integer
+          format: int64
+          nullable: true
+        recipientUserId:
+          type: integer
+          format: int64
+          nullable: true
+        drinkId:
+          type: integer
+          format: int64
+          nullable: true
+        reviewId:
+          type: integer
+          format: int64
+          nullable: true
+
+    AddMembersRequest:
+      type: object
+      properties:
+        memberIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+      required: [memberIds]
+
+    BanRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+        durationDays:
+          type: integer
+          nullable: true
+          description: Срок бана в днях; отсутствие/0 — навсегда
+        deleteComments:
+          type: boolean
+          default: false
+        alsoBanUserIds:
+          type: array
+          nullable: true
+          items:
+            type: integer
+            format: int64
+          description: Дополнительные (связанные) аккаунты для бана
+      required: [reason]
+
+    RoleRequest:
+      type: object
+      properties:
+        admin:
+          type: boolean
+          description: true — выдать права админа, false — снять
+      required: [admin]
+
+    WarnRequest:
+      type: object
+      properties:
+        message:
+          type: string
+
+    DeleteReviewRequest:
+      type: object
+      properties:
+        reason:
+          type: string
