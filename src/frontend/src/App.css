@@ -60,7 +60,17 @@ body {
 a { color: inherit; text-decoration: none; }
 
 /* ─── Анимированный фон-сетка (фрагменты плавно появляются/исчезают) ─── */
-.bg-grid { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.bg-grid {
+  position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden;
+  -webkit-mask: linear-gradient(135deg, #000 0%, #000 40%, transparent 50%, #000 60%, #000 100%) 0 0 / 300% 300% no-repeat;
+  mask: linear-gradient(135deg, #000 0%, #000 40%, transparent 50%, #000 60%, #000 100%) 0 0 / 300% 300% no-repeat;
+  animation: grid-wave 10s ease-in-out infinite;
+}
+/* Сетка пропадает и снова появляется волной — из левого-верхнего в правый-нижний угол */
+@keyframes grid-wave {
+  from { -webkit-mask-position: 100% 100%; mask-position: 100% 100%; }
+  to   { -webkit-mask-position: 0% 0%;     mask-position: 0% 0%; }
+}
 .bg-grid::before, .bg-grid::after {
   content: ""; position: absolute; inset: -2px;
   background-image:
@@ -88,9 +98,11 @@ a { color: inherit; text-decoration: none; }
   100% { -webkit-mask-position: 22% 72%; mask-position: 22% 72%; opacity: 0.8; }
 }
 @media (prefers-reduced-motion: reduce) {
+  .bg-grid { animation: none; -webkit-mask: none; mask: none; }
   .bg-grid::after { animation: none; }
 }
 /* Пользователь может выключить «живой» фон: остаётся статичная сетка + угловое свечение */
+[data-bg-anim="off"] .bg-grid { animation: none; -webkit-mask: none; mask: none; }
 [data-bg-anim="off"] .bg-grid::after { display: none; }
 
 /* ─── Акцентное свечение из левого верхнего угла (как в шапке окна фильтра) ─── */
@@ -102,6 +114,7 @@ a { color: inherit; text-decoration: none; }
       color-mix(in srgb, var(--accent) 6%, transparent) 38%,
       transparent 70%);
 }
+
 
 /* ─────────────── Navbar ─────────────── */
 .navbar {
