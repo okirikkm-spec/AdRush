@@ -10,7 +10,7 @@ import Avatar from "./Avatar";
 import BanModal from "./BanModal";
 import { ShareModal } from "./ShareControl";
 
-export default function ReviewSection({ drinkId, showSummary = true, onChanged }) {
+export default function ReviewSection({ drinkId, showSummary = true, onChanged, highlightReviewId }) {
   const navigate = useNavigate();
   const authed = isAuthenticated();
 
@@ -45,6 +45,19 @@ export default function ReviewSection({ drinkId, showSummary = true, onChanged }
   useEffect(() => {
     load().catch((e) => setError(e.message));
   }, [load]);
+
+  // прокрутка и подсветка отзыва, на который перешли из чата (?review=id) — однократно
+  const scrolledTo = useRef(null);
+  useEffect(() => {
+    if (!highlightReviewId || reviews.length === 0 || scrolledTo.current === highlightReviewId) return;
+    const el = document.getElementById(`review-${highlightReviewId}`);
+    if (!el) return;
+    scrolledTo.current = highlightReviewId;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("review-flash");
+    const t = setTimeout(() => el.classList.remove("review-flash"), 2300);
+    return () => clearTimeout(t);
+  }, [highlightReviewId, reviews]);
 
   const handleAdminDelete = async (reviewId) => {
     const reason = window.prompt("Причина удаления отзыва (будет показана автору):", "");
@@ -152,7 +165,7 @@ export default function ReviewSection({ drinkId, showSummary = true, onChanged }
         ) : (
           <div className="review-list">
             {reviews.map((r) => (
-              <div key={r.id} className={`review ${r.mine ? "mine" : ""}`}>
+              <div key={r.id} id={`review-${r.id}`} className={`review ${r.mine ? "mine" : ""}`}>
                 <div className="review-head">
                   <Link to={`/user/${r.userId}`}>
                     <Avatar url={r.userAvatarUrl} name={r.userDisplayName} size={32} />

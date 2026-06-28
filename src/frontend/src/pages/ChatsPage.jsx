@@ -61,7 +61,7 @@ function SharedDrink({ drink }) {
 /** Карточка отзыва внутри сообщения (кликабельна → /drink/:id энергетика отзыва). */
 function SharedReview({ review }) {
   return (
-    <Link to={`/drink/${review.drinkId}`} className="chat-card chat-card-review">
+    <Link to={`/drink/${review.drinkId}?review=${review.id}`} className="chat-card chat-card-review">
       <div className="chat-card-review-head">
         <Avatar url={review.authorAvatarUrl} name={review.authorName} size={24} />
         <span className="chat-card-review-author">{review.authorName}</span>
@@ -473,7 +473,11 @@ export default function ChatsPage() {
         ) : (
           <section className="chat-main chat-main-empty">
             <div className="chat-placeholder">
-              <div className="chat-placeholder-icon">💬</div>
+              <div className="chat-placeholder-icon">
+                <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7a8.5 8.5 0 0 1-.9-3.8A8.38 8.38 0 0 1 12.5 3 8.38 8.38 0 0 1 21 11.5z" />
+                </svg>
+              </div>
               <p>Выберите беседу или начните новую</p>
               <button className="btn btn-primary" onClick={() => setShowNew(true)}>＋ Новый чат</button>
             </div>

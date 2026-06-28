@@ -24,7 +24,7 @@ function ratingWord(n) {
  * @param summary краткие данные из списка — для мгновенного показа до загрузки
  * @param onChanged вызывается после изменений, чтобы обновить список на главной
  */
-export default function DrinkModal({ drinkId, summary, onClose, onChanged }) {
+export default function DrinkModal({ drinkId, summary, highlightReviewId, onClose, onChanged }) {
   const [drink, setDrink] = useState(summary || null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -270,7 +270,7 @@ export default function DrinkModal({ drinkId, summary, onClose, onChanged }) {
 
               {drink?.description && <p className="modal-desc">{drink.description}</p>}
 
-              <ReviewSection drinkId={drinkId} showSummary={false} onChanged={handleReviewChange} />
+              <ReviewSection drinkId={drinkId} showSummary={false} onChanged={handleReviewChange} highlightReviewId={highlightReviewId} />
             </div>
           </>
         )}

@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
-import { isAuthenticated, removeToken, fetchMe } from "../services/api";
+import { useState } from "react";
+import { isAuthenticated, removeToken } from "../services/api";
 import { useChat } from "../ChatContext";
 import Avatar from "./Avatar";
 import BrandText from "./BrandText";
@@ -19,14 +19,11 @@ function Bolt() {
 export default function Navbar() {
   const navigate = useNavigate();
   const authed = isAuthenticated();
-  const [me, setMe] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const chat = useChat();
   const chatUnread = chat?.unreadTotal || 0;
-
-  useEffect(() => {
-    if (authed) fetchMe().then(setMe).catch(() => {});
-  }, [authed]);
+  // профиль берём из ChatContext (грузится один раз в корне) — без мигания «Профиль» при смене страниц
+  const me = chat?.me;
 
   const handleLogout = () => {
     removeToken();
@@ -45,12 +42,12 @@ export default function Navbar() {
       </Link>
 
       <div className="navbar-actions">
-        {/* Редактор оформления (тема, акцент, фон…) — доступен и на мобильных */}
-        <ThemePicker />
-
         {isAdmin && (
           <Link className="btn btn-ghost btn-sm navbar-collapsible" to="/admin">Админка</Link>
         )}
+
+        {/* Редактор оформления (тема, акцент, фон…) — доступен и на мобильных */}
+        <ThemePicker />
 
         {authed ? (
           <>

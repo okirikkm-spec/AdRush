@@ -42,12 +42,9 @@
 html { scrollbar-width: thin; scrollbar-color: var(--surface-3) transparent; }
 
 /* Скруглённые тонкие полосы прокрутки — в т.ч. горизонтальные (галерея миниатюр, ленты) */
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb {
-  background: var(--surface-3); border-radius: 100px;
-  border: 2px solid transparent; background-clip: padding-box;
-}
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: transparent; margin: 0; }
+::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 100px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
 
 body {
@@ -688,6 +685,12 @@ a.mini-review-name:hover { color: var(--accent); }
   border-radius: var(--radius); padding: 15px 17px;
 }
 .review.mine { border-color: var(--accent-dim); box-shadow: inset 0 0 0 1px var(--accent-dim); }
+/* подсветка отзыва, на который перешли из чата */
+.review-flash { animation: reviewFlash 2.2s ease; }
+@keyframes reviewFlash {
+  0%, 22% { box-shadow: 0 0 0 2px var(--accent), 0 0 24px color-mix(in srgb, var(--accent) 45%, transparent); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
 .review-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .review-author { font-weight: 700; font-size: 14px; }
 .review-date { color: var(--text-faint); font-size: 12px; margin-left: auto; }
@@ -738,13 +741,37 @@ a.mini-review-name:hover { color: var(--accent); }
 .switch-label { display: flex; align-items: center; gap: 10px; cursor: pointer; }
 
 /* ─────────────── 2FA ─────────────── */
-.qr-box { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; }
-.qr-box img { width: 200px; height: 200px; border-radius: var(--radius); background: #fff; padding: 8px; }
-.secret-code {
-  font-family: ui-monospace, monospace; font-size: 14px; letter-spacing: 1px;
-  background: var(--surface-2); padding: 8px 14px; border-radius: var(--radius-sm);
-  border: 1px solid var(--border); word-break: break-all;
+/* ─── Модалка настройки 2FA ─── */
+.twofa-modal { max-width: 460px; padding: 22px; max-height: 88vh; overflow-y: auto; }
+.twofa-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+.twofa-title { font-size: 18px; font-weight: 800; }
+.twofa-section { margin-bottom: 20px; }
+.twofa-section-title { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; margin-bottom: 5px; }
+.twofa-section-title svg { color: var(--accent); flex-shrink: 0; }
+.twofa-hint { font-size: 13px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.45; }
+.twofa-qr-row {
+  display: flex; gap: 14px;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px;
 }
+.twofa-qr { width: 124px; height: 124px; flex-shrink: 0; border-radius: 12px; background: #fff; padding: 7px; }
+.twofa-manual { display: flex; flex-direction: column; gap: 8px; min-width: 0; justify-content: center; }
+.twofa-manual-label { font-size: 12.5px; color: var(--text-muted); }
+.twofa-secret {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; font-size: 14px; letter-spacing: 1px;
+  background: var(--surface-3); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 9px 11px; word-break: break-all; color: var(--text);
+}
+.twofa-copy { align-self: flex-start; }
+.otp-input { display: flex; gap: 8px; }
+.otp-cell {
+  flex: 1; min-width: 0; height: 54px; text-align: center; font-size: 22px; font-weight: 700;
+  background: var(--surface-2); color: var(--text); font-family: var(--font);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.otp-cell:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+.twofa-foot { display: flex; justify-content: space-between; gap: 10px; margin-top: 8px; }
+.twofa-foot .btn { min-width: 120px; }
 
 /* ─────────────── Tier list ─────────────── */
 .tier-list { display: flex; flex-direction: column; gap: 8px; }
@@ -1151,7 +1178,7 @@ a.mini-review-name:hover { color: var(--accent); }
 .chat-main-empty { align-items: center; justify-content: center; }
 .chat-placeholder { text-align: center; color: var(--text-muted); display: flex; flex-direction: column; align-items: center; gap: 14px; }
 .chat-placeholder-icon {
-  font-size: 40px; width: 96px; height: 96px;
+  width: 96px; height: 96px; color: var(--accent);
   display: flex; align-items: center; justify-content: center; border-radius: 50%;
   background: var(--accent-dim);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent),
@@ -1286,7 +1313,8 @@ a.mini-review-name:hover { color: var(--accent); }
 .chat-card-review-rating { margin-left: auto; flex-shrink: 0; font-size: 12px; font-weight: 700; color: var(--gold); }
 .chat-card-review-text {
   font-size: 13px; color: var(--text); margin-top: 6px; line-height: 1.4;
-  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
+  white-space: pre-wrap; word-break: break-word;
+  max-height: 160px; overflow-y: auto; overscroll-behavior: contain;
 }
 
 /* Кнопка прикрепления картинки в композере */

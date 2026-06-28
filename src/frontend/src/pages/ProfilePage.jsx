@@ -4,6 +4,7 @@ import Navbar from "../components/Navbar";
 import Avatar from "../components/Avatar";
 import TierList from "../components/TierList";
 import RatingStars from "../components/RatingStars";
+import OtpInput from "../components/OtpInput";
 import {
   fetchMe, fetchUserProfile, updateMe, uploadAvatar, changePassword,
   setPrivacy, setup2fa, enable2fa, disable2fa,
@@ -198,6 +199,16 @@ function TwoFactorCard({ me, onChanged }) {
   const [setupData, setSetupData] = useState(null);
   const [code, setCode] = useState("");
   const [msg, setMsg] = useState(null);
+  const [copied, setCopied] = useState(false);
+
+  const cancelSetup = () => { setSetupData(null); setCode(""); setMsg(null); };
+  const copySecret = async () => {
+    try {
+      await navigator.clipboard.writeText(setupData.secret);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch { /* буфер недоступен */ }
+  };
 
   const startSetup = async () => {
     setMsg(null);
@@ -246,29 +257,62 @@ function TwoFactorCard({ me, onChanged }) {
               placeholder="Код для отключения" value={code} onChange={(e) => setCode(e.target.value)} />
             <button className="btn btn-danger" onClick={turnOff}>Отключить 2FA</button>
           </div>
+          {msg && <div className="error-text">{msg}</div>}
         </>
-      ) : setupData ? (
-        <div className="qr-box">
-          <p className="muted" style={{ fontSize: 13 }}>
-            Отсканируйте QR-код в Google Authenticator / Authy и введите 6-значный код.
-          </p>
-          <img src={setupData.qrDataUrl} alt="QR код 2FA" />
-          <div className="secret-code">{setupData.secret}</div>
-          <div className="row">
-            <input className="input" style={{ maxWidth: 180 }} inputMode="numeric"
-              placeholder="000000" value={code} onChange={(e) => setCode(e.target.value)} />
-            <button className="btn btn-primary" onClick={confirm}>Подтвердить</button>
-          </div>
-        </div>
       ) : (
         <>
           <div className="muted" style={{ fontSize: 13, marginBottom: 14 }}>
             Защитите аккаунт приложением-аутентификатором. Код также используется для восстановления пароля.
           </div>
           <button className="btn btn-primary" onClick={startSetup}>Подключить 2FA</button>
+          {!setupData && msg && <div className="error-text">{msg}</div>}
         </>
       )}
-      {msg && <div className="error-text">{msg}</div>}
+
+      {setupData && (
+        <div className="modal-overlay" onMouseDown={cancelSetup}>
+          <div className="modal twofa-modal" onMouseDown={(e) => e.stopPropagation()} role="dialog">
+            <div className="twofa-head">
+              <h2 className="twofa-title">Настройка аутентификатора</h2>
+              <button className="modal-close" onClick={cancelSetup} aria-label="Закрыть">×</button>
+            </div>
+
+            <div className="twofa-section">
+              <div className="twofa-section-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2" /></svg>
+                Сканируйте QR-код
+              </div>
+              <p className="twofa-hint">Отсканируйте QR-код в приложении-аутентификаторе (Google Authenticator, Authy) или введите ключ вручную.</p>
+              <div className="twofa-qr-row">
+                <img className="twofa-qr" src={setupData.qrDataUrl} alt="QR код 2FA" />
+                <div className="twofa-manual">
+                  <div className="twofa-manual-label">Не сканируется? Введите ключ вручную:</div>
+                  <div className="twofa-secret">{setupData.secret}</div>
+                  <button className="btn btn-secondary btn-sm twofa-copy" onClick={copySecret}>
+                    {copied ? "✓ Скопировано" : "⧉ Копировать ключ"}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="twofa-section">
+              <div className="twofa-section-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2" /><path d="M7 10h.01M11 10h.01M15 10h.01M17 14H7" /></svg>
+                Введите код подтверждения
+              </div>
+              <p className="twofa-hint">Введите 6-значный код из приложения-аутентификатора.</p>
+              <OtpInput value={code} onChange={setCode} />
+            </div>
+
+            {msg && <div className="error-text" style={{ marginBottom: 4 }}>{msg}</div>}
+
+            <div className="twofa-foot">
+              <button className="btn btn-secondary" onClick={cancelSetup}>Отмена</button>
+              <button className="btn btn-primary" onClick={confirm} disabled={code.length < 6}>Подтвердить</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

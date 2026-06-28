@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import DrinkCard from "../components/DrinkCard";
 import DrinkModal from "../components/DrinkModal";
@@ -9,6 +9,8 @@ import { fetchDrinks } from "../services/api";
 export default function MainPage() {
   const { id } = useParams();           // deep-link /drink/:id открывает модалку
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const highlightReviewId = searchParams.get("review"); // ?review=NN — прокрутить к отзыву
   const [drinks, setDrinks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -103,6 +105,7 @@ export default function MainPage() {
         <DrinkModal
           drinkId={openId}
           summary={drinks.find((d) => d.id === openId) || null}
+          highlightReviewId={highlightReviewId}
           onClose={closeModal}
           onChanged={loadDrinks}
         />
