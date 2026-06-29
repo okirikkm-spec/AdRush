@@ -669,6 +669,10 @@ a.mini-review-name:hover { color: var(--accent); }
   box-shadow: 0 2px 10px color-mix(in srgb, var(--accent) 40%, transparent);
   transition: width 0.12s ease;
 }
+/* На узком (мобильном) треке низкая оценка даёт заливку уже своей высоты, и из-за
+   border-radius:100px она вырождается в острую «линзу». Минимум по ширине = высоте трека
+   держит левый край чистой пилюлей. Применяется только когда оценка выбрана (иначе пусто). */
+.rate-slider-fill.has-value { min-width: 44px; }
 .rate-slider-nodes {
   position: relative; height: 100%;
   display: flex; align-items: center; justify-content: space-between; padding: 0 8px;

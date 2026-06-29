@@ -29,5 +29,5 @@ DAPLY.md
 graphify-out/
 
 ### Отладочные артефакты (не часть проекта) ###
-build.log
+build*.log
 redbull_dump.html

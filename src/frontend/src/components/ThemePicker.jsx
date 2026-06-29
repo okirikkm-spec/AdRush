@@ -56,9 +56,16 @@ export default function ThemePicker() {
   // по странице. Capture-фаза — чтобы не блокироваться stopPropagation на страницах.
   useEffect(() => {
     if (!open) return;
-    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const outside = (e) => !ref.current || !ref.current.contains(e.target);
+    const onDoc = (e) => { if (outside(e)) setOpen(false); };
+    // Прокрутка страницы закрывает меню; скролл внутри самого меню (overflow-y) — нет.
+    const onScroll = (e) => { if (outside(e)) setOpen(false); };
     document.addEventListener("mousedown", onDoc, true);
-    return () => document.removeEventListener("mousedown", onDoc, true);
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", onDoc, true);
+      window.removeEventListener("scroll", onScroll, true);
+    };
   }, [open]);
 
   return (

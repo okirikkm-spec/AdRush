@@ -50,7 +50,10 @@ export default function RatingSlider({ value = 0, onRate }) {
         onPointerMove={onPointerMove}
         onKeyDown={onKeyDown}
       >
-        <div className="rate-slider-fill" style={{ width: `${(Math.max(0, value) / MAX) * 100}%` }} />
+        <div
+          className={"rate-slider-fill" + (value > 0 ? " has-value" : "")}
+          style={{ width: `${(Math.max(0, value) / MAX) * 100}%` }}
+        />
         <div className="rate-slider-nodes">
           {Array.from({ length: MAX }, (_, idx) => idx + 1).map((i) => (
             <span key={i} className={"rate-node" + (i <= value ? " on" : "") + (i === value ? " current" : "")}>
