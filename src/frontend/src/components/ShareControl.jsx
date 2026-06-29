@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { searchChatUsers, shareToChat, isAuthenticated } from "../services/api";
 import { useChat } from "../ChatContext";
@@ -52,7 +53,7 @@ export default function ShareControl({ drinkId, reviewId, className = "" }) {
   );
 }
 
-export function ShareModal({ drinkId, reviewId, onClose }) {
+export function ShareModal({ drinkId, reviewId, theme, onClose }) {
   const navigate = useNavigate();
   const chat = useChat();
   const meId = chat?.me?.id;
@@ -80,7 +81,7 @@ export function ShareModal({ drinkId, reviewId, onClose }) {
     if (busy) return;
     setBusy(true); setError(null);
     try {
-      const res = await shareToChat({ ...payload, drinkId, reviewId });
+      const res = await shareToChat({ ...payload, drinkId, reviewId, theme });
       setDone({ conversationId: res.conversationId, name });
     } catch (e) {
       setError(e.message);
@@ -91,7 +92,9 @@ export function ShareModal({ drinkId, reviewId, onClose }) {
 
   const stop = (e) => e.stopPropagation();
 
-  return (
+  // Портал в body: иначе fixed-оверлей оказывается внутри containing block навбара
+  // (у .navbar есть backdrop-filter) и прижимается к верху, а не центрируется на экране.
+  return createPortal(
     <div className="modal-overlay" style={{ zIndex: 300 }}
       onMouseDown={(e) => { stop(e); onClose(); }} onClick={stop}>
       <div className="modal modal-picker" onMouseDown={stop} onClick={stop}>
@@ -100,7 +103,7 @@ export function ShareModal({ drinkId, reviewId, onClose }) {
             <div className="picker-icon">↗</div>
             <div>
               <div className="picker-title">Поделиться</div>
-              <div className="picker-sub">{reviewId ? "Отзыв" : "Карточка энергетика"}</div>
+              <div className="picker-sub">{theme ? "Тема оформления" : reviewId ? "Отзыв" : "Карточка энергетика"}</div>
             </div>
           </div>
           <button className="modal-close" onClick={onClose}>×</button>
@@ -151,6 +154,7 @@ export function ShareModal({ drinkId, reviewId, onClose }) {
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

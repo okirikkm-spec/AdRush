@@ -208,12 +208,12 @@ export default function ReviewSection({ drinkId, showSummary = true, onChanged, 
 }
 
 /**
- * Меню «⋮» справа сверху отзыва: все действия в одном месте —
- * «Переслать» (всем авторизованным) + модерация (предупредить/забанить/удалить) для админа.
+ * Меню «⋮» справа сверху отзыва: все действия в одном месте — для любого авторизованного
+ * «Поделиться карточкой» и «Поделиться отзывом», для админа — модерация (предупредить/забанить/удалить).
  */
 function ReviewActions({ review, isAdmin, onWarn, onBan, onDelete }) {
   const [open, setOpen] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
+  const [shareTarget, setShareTarget] = useState(null); // { drinkId } | { reviewId } — что шарим
   const ref = useRef(null);
   const authed = isAuthenticated();
   const adminActions = isAdmin && !review.mine;
@@ -240,10 +240,16 @@ function ReviewActions({ review, isAdmin, onWarn, onBan, onDelete }) {
       {open && (
         <div className="share-menu">
           {authed && (
-            <button type="button" className="share-menu-item"
-              onClick={() => { setOpen(false); setShareOpen(true); }}>
-              <span aria-hidden>↗</span> Переслать
-            </button>
+            <>
+              <button type="button" className="share-menu-item"
+                onClick={() => { setOpen(false); setShareTarget({ drinkId: review.drinkId }); }}>
+                <span aria-hidden>🥤</span> Поделиться карточкой
+              </button>
+              <button type="button" className="share-menu-item"
+                onClick={() => { setOpen(false); setShareTarget({ reviewId: review.id }); }}>
+                <span aria-hidden>↗</span> Поделиться отзывом
+              </button>
+            </>
           )}
           {adminActions && (
             <>
@@ -264,7 +270,7 @@ function ReviewActions({ review, isAdmin, onWarn, onBan, onDelete }) {
         </div>
       )}
 
-      {shareOpen && <ShareModal reviewId={review.id} onClose={() => setShareOpen(false)} />}
+      {shareTarget && <ShareModal {...shareTarget} onClose={() => setShareTarget(null)} />}
     </div>
   );
 }

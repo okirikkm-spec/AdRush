@@ -13,6 +13,7 @@ import com.adrenrush.web.repository.ConversationMemberRepository;
 import com.adrenrush.web.repository.ConversationRepository;
 import com.adrenrush.web.repository.ReviewRepository;
 import com.adrenrush.web.repository.UserRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -38,6 +39,9 @@ public class ChatService {
     private final StorageService storageService;
     private final DrinkService drinkService;
     private final SimpMessagingTemplate messagingTemplate;
+    private final ObjectMapper objectMapper;
+
+    private static final java.util.regex.Pattern HEX = java.util.regex.Pattern.compile("^#[0-9a-fA-F]{6}$");
 
     /* ─────────────── Чтение ─────────────── */
 
@@ -230,12 +234,14 @@ public class ChatService {
     }
 
     /**
-     * Поделиться карточкой энергетика или отзывом: либо в существующую беседу (conversationId),
-     * либо личным сообщением получателю (recipientUserId — найдём/создадим личку).
+     * Поделиться карточкой энергетика, отзывом или темой оформления: либо в существующую беседу
+     * (conversationId), либо личным сообщением получателю (recipientUserId — найдём/создадим личку).
      */
     @Transactional
-    public ChatMessageDto share(User me, Long conversationId, Long recipientUserId, Long drinkId, Long reviewId) {
-        if (drinkId == null && reviewId == null) throw ApiException.badRequest("Нечего отправить");
+    public ChatMessageDto share(User me, Long conversationId, Long recipientUserId,
+                                Long drinkId, Long reviewId, Map<String, Object> theme) {
+        boolean hasTheme = theme != null && !theme.isEmpty();
+        if (drinkId == null && reviewId == null && !hasTheme) throw ApiException.badRequest("Нечего отправить");
         Long convId;
         if (conversationId != null) {
             convId = conversationId;
@@ -252,7 +258,8 @@ public class ChatService {
         msg.setSender(me);
         msg.setContent("");
         if (drinkId != null) msg.setSharedDrinkId(drinkId);
-        else msg.setSharedReviewId(reviewId);
+        else if (reviewId != null) msg.setSharedReviewId(reviewId);
+        else msg.setSharedTheme(buildThemeJson(theme));
         return persistAndBroadcast(convId, mine, msg);
     }
 
@@ -403,7 +410,51 @@ public class ChatService {
         ChatMessageDto dto = ChatMessageDto.from(m);
         if (m.getSharedDrinkId() != null) dto.setSharedDrink(buildSharedDrink(m.getSharedDrinkId()));
         if (m.getSharedReviewId() != null) dto.setSharedReview(buildSharedReview(m.getSharedReviewId()));
+        if (m.getSharedTheme() != null) dto.setSharedTheme(parseTheme(m.getSharedTheme()));
         return dto;
+    }
+
+    /** Валидирует и сериализует тему оформления в компактный JSON для хранения. */
+    private String buildThemeJson(Map<String, Object> theme) {
+        ChatMessageDto.SharedThemeDto t = new ChatMessageDto.SharedThemeDto();
+        t.setAccent(hexOr(theme.get("accent"), "#ff3b30"));
+        t.setBg(hexOr(theme.get("bg"), "#0c0c10"));
+        double r = toDouble(theme.get("radius"), 1);
+        t.setRadius(r < 0 ? 0 : Math.min(r, 3));
+        t.setBgAnim(!Boolean.FALSE.equals(toBool(theme.get("bgAnim"))));
+        String name = theme.get("name") == null ? null : theme.get("name").toString().strip();
+        if (name != null && name.length() > 40) name = name.substring(0, 40);
+        t.setName(name == null || name.isBlank() ? null : name);
+        try {
+            return objectMapper.writeValueAsString(t);
+        } catch (Exception e) {
+            throw ApiException.badRequest("Некорректная тема");
+        }
+    }
+
+    /** Восстанавливает тему из JSON; null — если запись повреждена. */
+    private ChatMessageDto.SharedThemeDto parseTheme(String json) {
+        try {
+            return objectMapper.readValue(json, ChatMessageDto.SharedThemeDto.class);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String hexOr(Object v, String fallback) {
+        return v != null && HEX.matcher(v.toString().trim()).matches() ? v.toString().trim().toLowerCase() : fallback;
+    }
+
+    private double toDouble(Object v, double fallback) {
+        if (v instanceof Number n) return n.doubleValue();
+        try { return v == null ? fallback : Double.parseDouble(v.toString()); }
+        catch (NumberFormatException e) { return fallback; }
+    }
+
+    private Boolean toBool(Object v) {
+        if (v instanceof Boolean b) return b;
+        if (v == null) return null;
+        return Boolean.valueOf(v.toString());
     }
 
     /** Превью энергетика (имя/бренд/обложка/рейтинг). null — если энергетик удалён. */

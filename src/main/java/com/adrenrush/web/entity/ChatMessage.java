@@ -39,6 +39,10 @@ public class ChatMessage {
     @Column(name = "shared_review_id")
     private Long sharedReviewId;
 
+    /** Расшаренная тема оформления (JSON: accent/bg/radius/bgAnim/name), иначе null. */
+    @Column(name = "shared_theme", columnDefinition = "text")
+    private String sharedTheme;
+
     @Column(nullable = false)
     private Instant createdAt = Instant.now();
 }

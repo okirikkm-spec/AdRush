@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { useTheme } from "../ThemeContext";
 import { isLightBg } from "../theme/palette";
+import { isAuthenticated } from "../services/api";
+import { ShareModal } from "./ShareControl";
 
 function PaletteIcon() {
   return (
@@ -49,7 +51,12 @@ export default function ThemePicker() {
     resetAll, isDefault,
   } = useTheme();
   const [open, setOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const ref = useRef(null);
+
+  // Имя для расшаренной темы: по совпадающему пресету акцента, иначе «Моя тема».
+  const themeName = (accentPresets.find((p) => sameColor(p.color, accent))?.name) || "Моя тема";
+  const currentTheme = { name: themeName, accent, bg, radius, bgAnim };
 
   // Закрытие по клику вне окна. Backdrop тут не работает: у .navbar есть backdrop-filter,
   // из-за которого position:fixed-оверлей ограничивается высотой навбара и не ловит клики
@@ -160,9 +167,17 @@ export default function ThemePicker() {
               <button type="button" className="btn btn-ghost btn-sm" onClick={resetAll} disabled={isDefault}>
                 Сбросить всё
               </button>
+              {isAuthenticated() && (
+                <button type="button" className="btn btn-secondary btn-sm"
+                  onClick={() => { setOpen(false); setShareOpen(true); }}>
+                  ↗ Поделиться
+                </button>
+              )}
             </div>
           </div>
       )}
+
+      {shareOpen && <ShareModal theme={currentTheme} onClose={() => setShareOpen(false)} />}
     </div>
   );
 }

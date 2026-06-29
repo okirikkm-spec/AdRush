@@ -318,14 +318,14 @@ export async function sendChatImage(convId, file, caption) {
   return res.json();
 }
 /**
- * Поделиться карточкой энергетика (drinkId) или отзывом (reviewId): получателю
- * (recipientUserId → личка) или в существующую беседу (conversationId).
+ * Поделиться карточкой энергетика (drinkId), отзывом (reviewId) или темой оформления (theme):
+ * получателю (recipientUserId → личка) или в существующую беседу (conversationId).
  * Возвращает { conversationId, message }.
  */
-export function shareToChat({ recipientUserId, conversationId, drinkId, reviewId }) {
+export function shareToChat({ recipientUserId, conversationId, drinkId, reviewId, theme }) {
   return jsonRequest("/api/chats/share", {
     method: "POST",
-    body: { recipientUserId, conversationId, drinkId, reviewId },
+    body: { recipientUserId, conversationId, drinkId, reviewId, theme },
     auth: true,
   });
 }

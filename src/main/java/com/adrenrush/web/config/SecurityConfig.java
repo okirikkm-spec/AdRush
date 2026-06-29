@@ -43,7 +43,8 @@ public class SecurityConfig {
                 // Статика SPA и клиентские маршруты
                 .requestMatchers("/", "/index.html", "/static/**", "/assets/**",
                     "/*.js", "/*.css", "/*.ico", "/*.json", "/*.png", "/*.svg", "/*.txt", "/*.webp",
-                    "/login", "/register", "/profile", "/profile/**",
+                    "/robots.txt", "/sitemap.xml",
+                    "/login", "/register", "/recover", "/profile", "/profile/**",
                     "/drink/**", "/user/**", "/admin", "/admin/**",
                     "/chats", "/chats/**").permitAll()
                 .anyRequest().authenticated()

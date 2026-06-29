@@ -85,14 +85,14 @@ public class ChatController {
     }
 
     /**
-     * Поделиться карточкой энергетика (drinkId) или отзывом (reviewId): либо в существующую беседу
-     * (conversationId), либо личным сообщением получателю (recipientUserId).
+     * Поделиться карточкой энергетика (drinkId), отзывом (reviewId) или темой оформления (theme):
+     * либо в существующую беседу (conversationId), либо личным сообщением получателю (recipientUserId).
      */
     @PostMapping("/share")
     public ResponseEntity<Map<String, Object>> share(@AuthenticationPrincipal User me, @RequestBody Map<String, Object> body) {
         ChatMessageDto msg = chatService.share(me,
             toLong(body.get("conversationId")), toLong(body.get("recipientUserId")),
-            toLong(body.get("drinkId")), toLong(body.get("reviewId")));
+            toLong(body.get("drinkId")), toLong(body.get("reviewId")), asMap(body.get("theme")));
         return ResponseEntity.ok(Map.of("conversationId", msg.getConversationId(), "message", msg));
     }
 
@@ -121,6 +121,11 @@ public class ChatController {
         if (o == null) return null;
         if (o instanceof Number n) return n.longValue();
         try { return Long.valueOf(o.toString()); } catch (NumberFormatException e) { return null; }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> asMap(Object o) {
+        return o instanceof Map<?, ?> m ? (Map<String, Object>) m : null;
     }
 
     private List<Long> toLongList(Object o) {

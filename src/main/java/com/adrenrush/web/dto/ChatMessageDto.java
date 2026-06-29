@@ -19,6 +19,8 @@ public class ChatMessageDto {
     private SharedDrinkDto sharedDrink;
     /** Расшаренный отзыв (превью), иначе null. Заполняется в ChatService. */
     private SharedReviewDto sharedReview;
+    /** Расшаренная тема оформления, иначе null. Заполняется в ChatService. */
+    private SharedThemeDto sharedTheme;
 
     public static ChatMessageDto from(ChatMessage m) {
         ChatMessageDto dto = new ChatMessageDto();
@@ -52,5 +54,15 @@ public class ChatMessageDto {
         private String authorAvatarUrl;
         private int rating;
         private String text;
+    }
+
+    /** Тема оформления, которой делятся в чате (полностью клиентские данные). */
+    @Data
+    public static class SharedThemeDto {
+        private String name;
+        private String accent;
+        private String bg;
+        private double radius;
+        private boolean bgAnim;
     }
 }

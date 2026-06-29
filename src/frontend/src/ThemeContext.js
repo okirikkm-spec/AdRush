@@ -112,6 +112,32 @@ export function ThemeProvider({ children }) {
   const setRadius = useCallback((r) => setRadiusState(typeof r === "number" && r >= 0 && r <= 3 ? r : 1), []);
   const setBgAnim = useCallback((v) => setBgAnimState(!!v), []);
 
+  /**
+   * Живой предпросмотр темы: применяет CSS-переменные напрямую к :root, НЕ трогая состояние
+   * и localStorage. Нужен, чтобы «примерить» чужую тему перед установкой. Снимается endPreview().
+   */
+  const previewTheme = useCallback((t) => {
+    if (!t) return;
+    const root = document.documentElement;
+    if (t.accent) root.style.setProperty("--accent", normHex(t.accent, accent));
+    if (t.bg) applyPalette(root, normHex(t.bg, bg));
+    if (typeof t.radius === "number") root.style.setProperty("--radius-scale", String(t.radius));
+    if (typeof t.bgAnim === "boolean") {
+      if (t.bgAnim) root.removeAttribute("data-bg-anim");
+      else root.setAttribute("data-bg-anim", "off");
+    }
+  }, [accent, bg]);
+
+  /** Возвращает оформление к сохранённому (снимает предпросмотр). */
+  const endPreview = useCallback(() => {
+    const root = document.documentElement;
+    root.style.setProperty("--accent", accent);
+    applyPalette(root, bg);
+    root.style.setProperty("--radius-scale", String(radius));
+    if (bgAnim) root.removeAttribute("data-bg-anim");
+    else root.setAttribute("data-bg-anim", "off");
+  }, [accent, bg, radius, bgAnim]);
+
   const resetAll = useCallback(() => {
     setAccentState(DEFAULT_ACCENT);
     setBgState(DEFAULT_BG);
@@ -140,6 +166,8 @@ export function ThemeProvider({ children }) {
         radiusPresets: RADIUS_PRESETS,
         bgAnim,
         setBgAnim,
+        previewTheme,
+        endPreview,
         resetAll,
         isDefault,
       }}

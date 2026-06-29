@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Avatar from "../components/Avatar";
 import { useChat } from "../ChatContext";
+import { useTheme } from "../ThemeContext";
 import { searchChatUsers, mediaUrl } from "../services/api";
 
 /* ─────────────── helpers ─────────────── */
@@ -39,6 +40,7 @@ const msgPreview = (m) => {
   if (m.imageUrl) return "📷 Фото";
   if (m.sharedDrink) return `🥤 ${m.sharedDrink.name}`;
   if (m.sharedReview) return `💬 Отзыв · ${m.sharedReview.drinkName || ""}`;
+  if (m.sharedTheme) return `🎨 Тема · ${m.sharedTheme.name || "оформление"}`;
   return m.content;
 };
 
@@ -70,6 +72,54 @@ function SharedReview({ review }) {
       <div className="chat-card-sub">об энергетике «{review.drinkName}»</div>
       {review.text && <div className="chat-card-review-text">{review.text}</div>}
     </Link>
+  );
+}
+
+/** Карточка темы оформления внутри сообщения: превью, «Предпросмотр» (примерить без сохранения) и «Применить». */
+function SharedTheme({ theme }) {
+  const { setAccent, setBg, setRadius, setBgAnim, previewTheme, endPreview } = useTheme();
+  const [applied, setApplied] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
+
+  // Если ушли со страницы / размонтировались во время предпросмотра — вернуть сохранённую тему.
+  useEffect(() => () => { if (previewing) endPreview(); }, [previewing, endPreview]);
+
+  const togglePreview = () => {
+    if (previewing) { endPreview(); setPreviewing(false); }
+    else { previewTheme(theme); setPreviewing(true); }
+  };
+
+  const apply = () => {
+    setAccent(theme.accent);
+    setBg(theme.bg);
+    if (typeof theme.radius === "number") setRadius(theme.radius);
+    setBgAnim(!!theme.bgAnim);
+    setPreviewing(false);
+    setApplied(true);
+  };
+
+  return (
+    <div className="chat-card chat-card-theme">
+      <div className="chat-card-theme-row">
+        <div className="chat-theme-preview" style={{ background: theme.bg }}>
+          <span className="chat-theme-dot" style={{ background: theme.accent }} />
+        </div>
+        <div className="chat-card-info">
+          <div className="chat-card-title">🎨 {theme.name || "Тема оформления"}</div>
+          <div className="chat-card-sub">{previewing ? "Это предпросмотр — пролистайте сайт" : "Акцент, фон и скругление"}</div>
+        </div>
+      </div>
+      <div className="chat-theme-actions">
+        <button type="button" className={"btn btn-sm " + (previewing ? "btn-primary" : "btn-secondary")}
+          onClick={togglePreview} disabled={applied}>
+          {previewing ? "Вернуть" : "Предпросмотр"}
+        </button>
+        <button type="button" className="btn btn-primary btn-sm"
+          onClick={apply} disabled={applied}>
+          {applied ? "Применено ✓" : "Применить"}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -381,7 +431,7 @@ function ConvView({ conv, meId, onBack }) {
               {showDay && <div className="chat-day">{day}</div>}
               <div className={"chat-msg" + (mine ? " mine" : "")}>
                 {!mine && conv.type === "GROUP" && <Avatar url={m.sender.avatarUrl} name={m.sender.displayName} size={28} />}
-                <div className={"chat-bubble" + ((m.imageUrl || m.sharedDrink || m.sharedReview) ? " has-media" : "")}>
+                <div className={"chat-bubble" + ((m.imageUrl || m.sharedDrink || m.sharedReview || m.sharedTheme) ? " has-media" : "")}>
                   {!mine && conv.type === "GROUP" && <div className="chat-bubble-author">{m.sender.displayName}</div>}
                   {m.imageUrl && (
                     <img className="chat-bubble-img" src={mediaUrl(m.imageUrl)} alt="Картинка" loading="lazy"
@@ -389,6 +439,7 @@ function ConvView({ conv, meId, onBack }) {
                   )}
                   {m.sharedDrink && <SharedDrink drink={m.sharedDrink} />}
                   {m.sharedReview && <SharedReview review={m.sharedReview} />}
+                  {m.sharedTheme && <SharedTheme theme={m.sharedTheme} />}
                   {m.content && <span className="chat-bubble-text">{m.content}</span>}
                   <span className="chat-bubble-meta">
                     {fmtTime(m.createdAt)}
