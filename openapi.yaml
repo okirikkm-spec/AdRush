@@ -690,6 +690,40 @@ paths:
               schema:
                 $ref: '#/components/schemas/RatingInfo'
 
+  /api/reviews/{reviewId}/reactions:
+    post:
+      tags: [Reviews]
+      summary: Поставить/сменить/снять эмодзи-реакцию на отзыв
+      description: >
+        Повторный клик по той же реакции снимает её, другой эмодзи — заменяет.
+        Допустимый набор: 👍 👎 ❤️ 🔥 😂 😮 😢. Требуется вход.
+      parameters:
+        - name: reviewId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReactionRequest'
+      responses:
+        '200':
+          description: Обновлённый отзыв со сводкой реакций
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewResponseDto'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   # ────────────────────────────── CHATS ─────────────────────────────
   /api/chats:
     get:
@@ -1564,6 +1598,24 @@ components:
         mine:
           type: boolean
           description: true, если отзыв принадлежит текущему пользователю
+        reactions:
+          type: array
+          description: Сводка эмодзи-реакций (по убыванию количества)
+          items:
+            $ref: '#/components/schemas/ReactionCount'
+        myReaction:
+          type: string
+          nullable: true
+          description: Эмодзи-реакция текущего пользователя на этот отзыв, либо null
+
+    ReactionCount:
+      type: object
+      description: Сколько раз поставлен конкретный эмодзи
+      properties:
+        emoji:
+          type: string
+        count:
+          type: integer
 
     # ── Чаты ──
     ConversationDto:
@@ -1958,6 +2010,15 @@ components:
           type: string
           nullable: true
       required: [rating]
+
+    ReactionRequest:
+      type: object
+      properties:
+        emoji:
+          type: string
+          description: Один из допустимого набора (👍 👎 ❤️ 🔥 😂 😮 😢)
+          enum: ["👍", "👎", "❤️", "🔥", "😂", "😮", "😢"]
+      required: [emoji]
 
     DirectChatRequest:
       type: object

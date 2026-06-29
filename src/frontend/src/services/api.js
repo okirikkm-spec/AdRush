@@ -207,6 +207,13 @@ export function submitReview(drinkId, rating, text) {
 export function deleteMyReview(drinkId) {
   return jsonRequest(`/api/drinks/${drinkId}/reviews/me`, { method: "DELETE", auth: true });
 }
+/**
+ * Поставить эмодзи-реакцию на отзыв. Повторная та же реакция снимается, другая — заменяет.
+ * Возвращает обновлённый отзыв (со сводкой reactions и myReaction).
+ */
+export function reactToReview(reviewId, emoji) {
+  return jsonRequest(`/api/reviews/${reviewId}/reactions`, { method: "POST", body: { emoji }, auth: true });
+}
 
 /* ─────────────── Пользователи ─────────────── */
 

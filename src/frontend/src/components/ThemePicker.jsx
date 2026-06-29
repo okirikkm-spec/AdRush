@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useTheme } from "../ThemeContext";
 import { isLightBg } from "../theme/palette";
 
@@ -49,9 +49,20 @@ export default function ThemePicker() {
     resetAll, isDefault,
   } = useTheme();
   const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  // Закрытие по клику вне окна. Backdrop тут не работает: у .navbar есть backdrop-filter,
+  // из-за которого position:fixed-оверлей ограничивается высотой навбара и не ловит клики
+  // по странице. Capture-фаза — чтобы не блокироваться stopPropagation на страницах.
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", onDoc, true);
+    return () => document.removeEventListener("mousedown", onDoc, true);
+  }, [open]);
 
   return (
-    <div className="theme-picker">
+    <div className="theme-picker" ref={ref}>
       <button
         className="btn-icon"
         onClick={() => setOpen((v) => !v)}
@@ -63,8 +74,6 @@ export default function ThemePicker() {
       </button>
 
       {open && (
-        <>
-          <div className="notif-backdrop" onClick={() => setOpen(false)} />
           <div className="theme-pop" role="menu">
             {/* Акцент */}
             <div className="theme-sec">
@@ -146,7 +155,6 @@ export default function ThemePicker() {
               </button>
             </div>
           </div>
-        </>
       )}
     </div>
   );

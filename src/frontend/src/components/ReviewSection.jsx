@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   fetchReviews, fetchRating, submitReview, deleteMyReview, isAuthenticated,
-  fetchMe, deleteReviewAsAdmin, warnUser,
+  fetchMe, deleteReviewAsAdmin, warnUser, reactToReview,
 } from "../services/api";
 import RatingStars from "./RatingStars";
 import RatingSlider from "./RatingSlider";
@@ -97,6 +97,16 @@ export default function ReviewSection({ drinkId, showSummary = true, onChanged, 
     }
   };
 
+  const handleReact = async (reviewId, emoji) => {
+    if (!authed) { navigate("/login"); return; }
+    try {
+      const updated = await reactToReview(reviewId, emoji);
+      setReviews((list) => list.map((r) => (r.id === reviewId ? updated : r)));
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
   const handleDelete = async () => {
     setSaving(true);
     try {
@@ -182,6 +192,7 @@ export default function ReviewSection({ drinkId, showSummary = true, onChanged, 
                   />
                 </div>
                 {r.text && <div className="review-text">{r.text}</div>}
+                <ReviewReactions review={r} authed={authed} onReact={handleReact} />
               </div>
             ))}
           </div>
@@ -254,6 +265,79 @@ function ReviewActions({ review, isAdmin, onWarn, onBan, onDelete }) {
       )}
 
       {shareOpen && <ShareModal reviewId={review.id} onClose={() => setShareOpen(false)} />}
+    </div>
+  );
+}
+
+/** Набор эмодзи-реакций (синхронизирован с бэкендом ReviewService.ALLOWED_REACTIONS). */
+const REACTION_EMOJIS = ["👍", "👎", "❤️", "🔥", "😂", "😮", "😢"];
+
+/**
+ * Реакции под отзывом: чипы с количеством (видны всем) и кнопка «＋» с палитрой эмодзи
+ * для авторизованных. Повторный клик по своей реакции снимает её.
+ */
+function ReviewReactions({ review, authed, onReact }) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const ref = useRef(null);
+  const reactions = review.reactions || [];
+  const mine = review.myReaction || null;
+
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setPickerOpen(false); };
+    document.addEventListener("mousedown", onDoc, true);
+    return () => document.removeEventListener("mousedown", onDoc, true);
+  }, [pickerOpen]);
+
+  if (reactions.length === 0 && !authed) return null;
+
+  return (
+    <div className="review-reactions">
+      {reactions.map((rc) => (
+        <button
+          key={rc.emoji}
+          type="button"
+          className={"reaction-chip" + (mine === rc.emoji ? " mine" : "")}
+          disabled={!authed}
+          onClick={() => onReact(review.id, rc.emoji)}
+          title={mine === rc.emoji ? "Убрать реакцию" : "Поддержать реакцию"}
+        >
+          <span className="reaction-emoji">{rc.emoji}</span>
+          <span className="reaction-count">{rc.count}</span>
+        </button>
+      ))}
+
+      {authed && (
+        <div className="reaction-add" ref={ref}>
+          <button
+            type="button"
+            className="reaction-add-btn"
+            onClick={() => setPickerOpen((v) => !v)}
+            aria-expanded={pickerOpen}
+            title="Добавить реакцию"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M8.5 14a4 4 0 0 0 7 0" /><path d="M9 9h.01" /><path d="M15 9h.01" />
+            </svg>
+          </button>
+          {pickerOpen && (
+            <div className="reaction-picker" role="menu">
+              {REACTION_EMOJIS.map((e) => (
+                <button
+                  key={e}
+                  type="button"
+                  className={"reaction-pick" + (mine === e ? " mine" : "")}
+                  onClick={() => { onReact(review.id, e); setPickerOpen(false); }}
+                >
+                  {e}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

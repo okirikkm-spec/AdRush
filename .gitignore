@@ -27,3 +27,7 @@ DAPLY.md
 
 ### Graphify knowledge graph (пересобирается локально хуком) ###
 graphify-out/
+
+### Отладочные артефакты (не часть проекта) ###
+build.log
+redbull_dump.html

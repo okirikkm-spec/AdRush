@@ -710,6 +710,48 @@ a.mini-review-name:hover { color: var(--accent); }
 .review-rating { color: var(--gold); font-weight: 700; font-size: 13px; }
 .review-text { color: var(--text); font-size: 14px; white-space: pre-wrap; }
 
+/* ─── Реакции на отзыв ─── */
+.review-reactions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 11px; }
+.reaction-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 9px; border-radius: 100px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  font-size: 13px; line-height: 1; cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.reaction-chip:hover:not(:disabled) { border-color: var(--border-light); }
+.reaction-chip:disabled { cursor: default; }
+.reaction-chip.mine {
+  background: var(--accent-dim); border-color: var(--accent);
+  color: var(--accent);
+}
+.reaction-emoji { font-size: 14px; }
+.reaction-count { font-weight: 700; font-size: 12px; }
+
+.reaction-add { position: relative; display: inline-flex; }
+.reaction-add-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 26px; padding: 0;
+  border-radius: 100px; background: transparent; border: 1px dashed var(--border-light);
+  color: var(--text-muted); cursor: pointer; transition: color 0.15s, border-color 0.15s;
+}
+.reaction-add-btn:hover { color: var(--accent); border-color: var(--accent); }
+.reaction-picker {
+  position: absolute; bottom: calc(100% + 8px); left: 0; z-index: 60;
+  display: flex; gap: 2px; padding: 6px;
+  background: var(--surface); border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm); box-shadow: var(--shadow-lg);
+  animation: pop 0.15s ease;
+}
+.reaction-pick {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; padding: 0; font-size: 19px; line-height: 1;
+  background: transparent; border: none; border-radius: var(--radius-sm); cursor: pointer;
+  transition: background 0.12s, transform 0.12s;
+}
+.reaction-pick:hover { background: var(--surface-2); transform: scale(1.18); }
+.reaction-pick.mine { background: var(--accent-dim); }
+
 /* ─────────────── Avatar ─────────────── */
 .avatar {
   border-radius: 50%; object-fit: cover; background: var(--surface-3);

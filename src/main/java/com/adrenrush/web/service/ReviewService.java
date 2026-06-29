@@ -3,37 +3,91 @@ package com.adrenrush.web.service;
 import com.adrenrush.web.dto.ReviewResponseDto;
 import com.adrenrush.web.entity.Drink;
 import com.adrenrush.web.entity.Review;
+import com.adrenrush.web.entity.ReviewReaction;
 import com.adrenrush.web.entity.User;
 import com.adrenrush.web.exception.ApiException;
 import com.adrenrush.web.repository.DrinkRepository;
+import com.adrenrush.web.repository.ReviewReactionRepository;
 import com.adrenrush.web.repository.ReviewRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 public class ReviewService {
 
+    /** Допустимый набор эмодзи-реакций (синхронизирован с фронтом ReviewSection.jsx). */
+    public static final Set<String> ALLOWED_REACTIONS = Set.of("👍", "👎", "❤️", "🔥", "😂", "😮", "😢");
+
     private final ReviewRepository reviewRepository;
     private final DrinkRepository drinkRepository;
+    private final ReviewReactionRepository reactionRepository;
 
     @Transactional(readOnly = true)
     public List<ReviewResponseDto> getReviewsForDrink(Long drinkId, Long currentUserId) {
-        return reviewRepository.findByDrinkIdOrderByUpdatedAtDesc(drinkId).stream()
-            .map(r -> ReviewResponseDto.from(r, currentUserId))
+        List<Review> reviews = reviewRepository.findByDrinkIdOrderByUpdatedAtDesc(drinkId);
+        Map<Long, List<ReviewReaction>> byReview = loadReactions(reviews);
+        return reviews.stream()
+            .map(r -> ReviewResponseDto.from(r, currentUserId, byReview.getOrDefault(r.getId(), List.of())))
             .toList();
     }
 
     @Transactional(readOnly = true)
     public List<ReviewResponseDto> getReviewsByUser(Long userId, Long currentUserId) {
-        return reviewRepository.findByUserIdOrderByUpdatedAtDesc(userId).stream()
-            .map(r -> ReviewResponseDto.from(r, currentUserId))
+        List<Review> reviews = reviewRepository.findByUserIdOrderByUpdatedAtDesc(userId);
+        Map<Long, List<ReviewReaction>> byReview = loadReactions(reviews);
+        return reviews.stream()
+            .map(r -> ReviewResponseDto.from(r, currentUserId, byReview.getOrDefault(r.getId(), List.of())))
             .toList();
+    }
+
+    /** Пакетно загружает реакции для списка отзывов и группирует их по id отзыва. */
+    private Map<Long, List<ReviewReaction>> loadReactions(List<Review> reviews) {
+        if (reviews.isEmpty()) return Map.of();
+        List<Long> ids = reviews.stream().map(Review::getId).toList();
+        Map<Long, List<ReviewReaction>> map = new HashMap<>();
+        for (ReviewReaction rr : reactionRepository.findByReviewIdIn(ids)) {
+            map.computeIfAbsent(rr.getReview().getId(), k -> new ArrayList<>()).add(rr);
+        }
+        return map;
+    }
+
+    /**
+     * Ставит/меняет/снимает реакцию текущего пользователя на отзыв.
+     * Повторная та же реакция — снимается, другая — заменяет прежнюю.
+     */
+    @Transactional
+    public ReviewResponseDto react(Long reviewId, User user, String emoji) {
+        if (emoji == null || !ALLOWED_REACTIONS.contains(emoji)) {
+            throw ApiException.badRequest("Недопустимая реакция");
+        }
+        Review review = reviewRepository.findById(reviewId)
+            .orElseThrow(() -> ApiException.notFound("Отзыв не найден"));
+
+        ReviewReaction existing = reactionRepository.findByReviewIdAndUserId(reviewId, user.getId()).orElse(null);
+        if (existing != null) {
+            if (existing.getEmoji().equals(emoji)) {
+                reactionRepository.delete(existing);   // повторный клик — снять реакцию
+            } else {
+                existing.setEmoji(emoji);              // сменить эмодзи
+                reactionRepository.save(existing);
+            }
+        } else {
+            ReviewReaction rr = new ReviewReaction();
+            rr.setReview(review);
+            rr.setUser(user);
+            rr.setEmoji(emoji);
+            reactionRepository.save(rr);
+        }
+        return ReviewResponseDto.from(review, user.getId(), reactionRepository.findByReviewId(reviewId));
     }
 
     /** Создаёт или обновляет отзыв текущего пользователя (одна оценка на напиток). */
@@ -56,7 +110,8 @@ public class ReviewService {
         review.setUpdatedAt(Instant.now());
         reviewRepository.save(review);
 
-        return ReviewResponseDto.from(review, user.getId());
+        List<ReviewReaction> reactions = isNew ? List.of() : reactionRepository.findByReviewId(review.getId());
+        return ReviewResponseDto.from(review, user.getId(), reactions);
     }
 
     @Transactional

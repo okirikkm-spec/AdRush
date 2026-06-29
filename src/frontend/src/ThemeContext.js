@@ -58,6 +58,22 @@ const lsSet = (key, value) => {
   }
 };
 
+/**
+ * Анимированный фон по умолчанию: включён на десктопе, выключен на мобильных/тач-устройствах
+ * (экономит батарею и держит прокрутку плавной). Применяется, только пока пользователь
+ * сам не выбрал значение — сохранённый выбор всегда в приоритете.
+ */
+function defaultBgAnim() {
+  try {
+    const mobile =
+      window.matchMedia("(max-width: 760px)").matches ||
+      window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+    return !mobile;
+  } catch {
+    return true;
+  }
+}
+
 export function ThemeProvider({ children }) {
   const [accent, setAccentState] = useState(() => normHex(lsGet("ar-accent", DEFAULT_ACCENT), DEFAULT_ACCENT));
   const [bg, setBgState] = useState(() => normHex(lsGet("ar-bg", DEFAULT_BG), DEFAULT_BG));
@@ -65,7 +81,10 @@ export function ThemeProvider({ children }) {
     const n = parseFloat(lsGet("ar-radius", "1"));
     return n >= 0 && n <= 3 ? n : 1;
   });
-  const [bgAnim, setBgAnimState] = useState(() => lsGet("ar-bg-anim", "on") !== "off");
+  const [bgAnim, setBgAnimState] = useState(() => {
+    const stored = lsGet("ar-bg-anim", null);
+    return stored === null ? defaultBgAnim() : stored !== "off";
+  });
 
   useEffect(() => {
     document.documentElement.style.setProperty("--accent", accent);
@@ -97,14 +116,14 @@ export function ThemeProvider({ children }) {
     setAccentState(DEFAULT_ACCENT);
     setBgState(DEFAULT_BG);
     setRadiusState(1);
-    setBgAnimState(true);
+    setBgAnimState(defaultBgAnim());
   }, []);
 
   const isDefault =
     accent.toLowerCase() === DEFAULT_ACCENT.toLowerCase() &&
     bg.toLowerCase() === DEFAULT_BG.toLowerCase() &&
     radius === 1 &&
-    bgAnim;
+    bgAnim === defaultBgAnim();
 
   return (
     <ThemeContext.Provider
