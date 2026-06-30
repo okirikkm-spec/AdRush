@@ -27,7 +27,7 @@ export default function MainPage() {
   );
 
   useEffect(() => {
-    document.title = "AdRush — рейтинг энергетиков";
+    document.title = "AdRush";
     loadDrinks().finally(() => setLoading(false));
   }, [loadDrinks]);
 

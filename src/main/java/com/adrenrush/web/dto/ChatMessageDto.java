@@ -21,6 +21,8 @@ public class ChatMessageDto {
     private SharedReviewDto sharedReview;
     /** Расшаренная тема оформления, иначе null. Заполняется в ChatService. */
     private SharedThemeDto sharedTheme;
+    /** Служебное сообщение (смена фото/названия группы) — рисуется по центру без пузыря. */
+    private boolean service;
 
     public static ChatMessageDto from(ChatMessage m) {
         ChatMessageDto dto = new ChatMessageDto();
@@ -30,6 +32,7 @@ public class ChatMessageDto {
         dto.setContent(m.getContent());
         dto.setCreatedAt(m.getCreatedAt());
         dto.setImageUrl(m.getImagePath());
+        dto.setService(m.isService());
         return dto;
     }
 

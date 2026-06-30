@@ -115,6 +115,26 @@ public class ChatController {
         return ResponseEntity.ok(Map.of("status", "ok"));
     }
 
+    /** Сменить фото группы (multipart). */
+    @PostMapping("/{id}/avatar")
+    public ResponseEntity<ConversationDto> setAvatar(@AuthenticationPrincipal User me,
+                                                     @PathVariable Long id,
+                                                     @RequestParam("file") MultipartFile file) {
+        if (file == null || file.isEmpty()) throw ApiException.badRequest("Пустой файл");
+        byte[] bytes;
+        try { bytes = file.getBytes(); } catch (IOException e) { throw ApiException.badRequest("Не удалось прочитать файл"); }
+        return ResponseEntity.ok(chatService.setAvatar(id, me, bytes, file.getContentType()));
+    }
+
+    /** Переименовать группу. */
+    @PutMapping("/{id}")
+    public ResponseEntity<ConversationDto> rename(@AuthenticationPrincipal User me,
+                                                  @PathVariable Long id,
+                                                  @RequestBody Map<String, Object> body) {
+        String title = body.get("title") == null ? null : body.get("title").toString();
+        return ResponseEntity.ok(chatService.rename(id, me, title));
+    }
+
     /* ── coercion ── */
 
     private Long toLong(Object o) {

@@ -3,6 +3,7 @@ import {
   isAuthenticated, fetchMe,
   fetchChats, fetchChatMessages, sendChatMessage, sendChatImage, markChatRead,
   openDirectChat, createGroupChat, addChatMembers, leaveChat,
+  setChatAvatar, renameChat,
 } from "./services/api";
 import { createChatSocket } from "./services/chatSocket";
 
@@ -177,6 +178,8 @@ export function ChatProvider({ children }) {
     setMessages((prev) => { const n = { ...prev }; delete n[cid]; return n; });
     if (activeRef.current === cid) activeRef.current = null;
   }), []);
+  const setAvatar = useCallback((cid, file) => setChatAvatar(cid, file).then((conv) => { upsertConversation(conv); return conv; }), [upsertConversation]);
+  const rename = useCallback((cid, title) => renameChat(cid, title).then((conv) => { upsertConversation(conv); return conv; }), [upsertConversation]);
   const sendTyping = useCallback((cid) => socketRef.current?.sendTyping(cid), []);
 
   const unreadTotal = conversations.reduce((s, c) => s + (c.unreadCount || 0), 0);
@@ -185,6 +188,7 @@ export function ChatProvider({ children }) {
     me, connected, conversations, messages, typing, unreadTotal,
     refresh, loadMessages, loadMore, setActive, send, sendImage,
     openDirect, createGroup, addMembers, leave, sendTyping,
+    setAvatar, rename,
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

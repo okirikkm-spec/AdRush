@@ -45,4 +45,8 @@ public class ChatMessage {
 
     @Column(nullable = false)
     private Instant createdAt = Instant.now();
+
+    /** Служебное сообщение (смена фото/названия группы и т.п.) — рисуется по центру без пузыря. */
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean service = false;
 }

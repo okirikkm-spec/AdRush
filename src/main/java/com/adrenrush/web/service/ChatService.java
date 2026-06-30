@@ -155,6 +155,45 @@ public class ChatService {
         return buildDto(c, me.getId());
     }
 
+    /** Сменить фото группы (любой участник). Пишет служебное сообщение в чат и оповещает всех. */
+    @Transactional
+    public ConversationDto setAvatar(Long convId, User me, byte[] bytes, String contentType) {
+        ConversationMember mine = requireMember(convId, me.getId());
+        Conversation c = mine.getConversation();
+        if (c.getType() != ConversationType.GROUP) throw ApiException.badRequest("Фото можно ставить только группе");
+        if (bytes == null || bytes.length == 0) throw ApiException.badRequest("Пустой файл");
+        if (contentType == null || !contentType.toLowerCase().startsWith("image/")) {
+            throw ApiException.badRequest("Можно загружать только изображения");
+        }
+        String key = "chat/" + convId + "/avatar-" + UUID.randomUUID() + extFromContentType(contentType);
+        try {
+            c.setAvatarPath(storageService.store(key, new ByteArrayInputStream(bytes), contentType));
+        } catch (Exception e) {
+            throw ApiException.badRequest("Не удалось сохранить изображение");
+        }
+        conversationRepo.save(c);
+        postService(c, me, displayName(me) + " обновил(а) фото группы");
+        notifyConversation(c, null);
+        return buildDto(c, me.getId());
+    }
+
+    /** Переименовать группу (любой участник). Пишет служебное сообщение в чат и оповещает всех. */
+    @Transactional
+    public ConversationDto rename(Long convId, User me, String title) {
+        ConversationMember mine = requireMember(convId, me.getId());
+        Conversation c = mine.getConversation();
+        if (c.getType() != ConversationType.GROUP) throw ApiException.badRequest("Переименовать можно только группу");
+        if (title == null || title.isBlank()) throw ApiException.badRequest("Введите название");
+        String t = title.strip();
+        if (t.length() > 80) t = t.substring(0, 80);
+        if (t.equals(c.getTitle())) return buildDto(c, me.getId());
+        c.setTitle(t);
+        conversationRepo.save(c);
+        postService(c, me, displayName(me) + " переименовал(а) группу: «" + t + "»");
+        notifyConversation(c, null);
+        return buildDto(c, me.getId());
+    }
+
     @Transactional
     public void leave(Long convId, User me) {
         ConversationMember mine = requireMember(convId, me.getId());
@@ -287,6 +326,28 @@ public class ChatService {
             send(m.getUser().getUsername(), ev);
         }
         return dto;
+    }
+
+    /** Служебное сообщение в беседе (системное событие): сохраняет и рассылает как обычное. */
+    private void postService(Conversation c, User actor, String text) {
+        ChatMessage msg = new ChatMessage();
+        msg.setConversation(c);
+        msg.setSender(actor);
+        msg.setContent(text);
+        msg.setService(true);
+        messageRepo.save(msg);
+        c.setLastMessageAt(msg.getCreatedAt());
+        conversationRepo.save(c);
+        ChatEventDto ev = ChatEventDto.of("message");
+        ev.setConversationId(c.getId());
+        ev.setMessage(messageDto(msg));
+        for (ConversationMember m : memberRepo.findByConversationId(c.getId())) {
+            send(m.getUser().getUsername(), ev);
+        }
+    }
+
+    private String displayName(User u) {
+        return u.getDisplayName() != null ? u.getDisplayName() : u.getUsername();
     }
 
     private String extFromContentType(String ct) {

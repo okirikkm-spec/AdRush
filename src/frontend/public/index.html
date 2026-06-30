@@ -2,7 +2,13 @@
 <html lang="ru">
   <head>
     <meta charset="utf-8" />
+    <!-- JS доступен → прячем серверный SEO-фоллбэк (.seo-content) ещё ДО первой отрисовки,
+         чтобы он не мелькал перед стартом React. Без JS (краулеры вроде Яндекса) — остаётся виден. -->
+    <script>document.documentElement.classList.add("js");</script>
+    <style>.js .seo-content{display:none}</style>
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" sizes="any" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#0c0c10" />
     <!-- Подтверждение прав в Google Search Console (ресурс с префиксом URL) -->

@@ -21,6 +21,10 @@ const convTitle = (conv, meId) => {
 const convAvatarUser = (conv, meId) =>
   conv?.type === "GROUP" ? null : otherMember(conv, meId)?.user || null;
 
+/** URL аватара беседы: фото группы или аватар собеседника в личке. */
+const convAvatarUrl = (conv, meId) =>
+  conv?.type === "GROUP" ? conv?.avatarUrl : convAvatarUser(conv, meId)?.avatarUrl;
+
 /** Беседа со служебным аккаунтом «Система» (уведомления) — только для чтения. */
 const isSystemConv = (conv, meId) =>
   conv?.type === "DIRECT" && !!otherMember(conv, meId)?.user?.system;
@@ -302,6 +306,75 @@ function AddMembersModal({ conv, onClose }) {
   );
 }
 
+/* ─────────────── Модалка «Участники группы» ─────────────── */
+
+function MembersModal({ conv, meId, onClose }) {
+  const navigate = useNavigate();
+  const { setAvatar, rename } = useChat();
+  const members = conv.members || [];
+  const fileRef = useRef(null);
+  const [title, setTitle] = useState(conv.title || "");
+  const [busy, setBusy] = useState(false);
+
+  const onPickAvatar = (e) => {
+    const f = e.target.files?.[0]; e.target.value = "";
+    if (!f) return;
+    setBusy(true);
+    setAvatar(conv.id, f).catch(() => {}).finally(() => setBusy(false));
+  };
+  const saveTitle = () => {
+    const t = title.trim();
+    if (!t || t === conv.title) return;
+    setBusy(true);
+    rename(conv.id, t).catch(() => {}).finally(() => setBusy(false));
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal modal-picker" onClick={(e) => e.stopPropagation()}>
+        <div className="picker-head">
+          <div className="picker-head-main">
+            <div className="picker-icon">👥</div>
+            <div>
+              <div className="picker-title">{conv.title || "Группа"}</div>
+              <div className="picker-sub">{members.length} участников</div>
+            </div>
+          </div>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+        <div className="picker-body">
+          <div className="group-settings">
+            <button type="button" className="group-avatar-edit" onClick={() => fileRef.current?.click()}
+              disabled={busy} title="Сменить фото группы">
+              <Avatar url={conv.avatarUrl} name={conv.title || "Группа"} size={64} />
+              <span className="group-avatar-cam" aria-hidden>📷</span>
+            </button>
+            <input ref={fileRef} type="file" accept="image/*" hidden onChange={onPickAvatar} />
+            <div className="group-rename">
+              <input className="input" value={title} maxLength={80}
+                onChange={(e) => setTitle(e.target.value)} placeholder="Название группы" />
+              <button className="btn btn-secondary btn-sm" onClick={saveTitle}
+                disabled={busy || !title.trim() || title.trim() === conv.title}>Сохранить</button>
+            </div>
+          </div>
+          <div className="chat-search-results">
+            {members.map((m) => (
+              <button key={m.user.id} type="button" className="chat-user-row"
+                onClick={() => navigate(`/user/${m.user.id}`)}>
+                <Avatar url={m.user.avatarUrl} name={m.user.displayName} size={34} />
+                <div className="chat-user-info">
+                  <div className="chat-user-name">{m.user.displayName}{m.user.id === meId ? " (вы)" : ""}</div>
+                  <div className="chat-user-login">@{m.user.username}{m.owner ? " · владелец" : ""}</div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─────────────── Список бесед ─────────────── */
 
 function ConvList({ activeId, onSelect, meId, onNew }) {
@@ -315,12 +388,11 @@ function ConvList({ activeId, onSelect, meId, onNew }) {
       <div className="chat-conv-list">
         {conversations.length === 0 && <div className="chat-empty-sm" style={{ padding: 24 }}>Пока нет бесед. Начните новый чат.</div>}
         {conversations.map((c) => {
-          const u = convAvatarUser(c, meId);
           return (
             <button key={c.id} type="button"
               className={"chat-conv" + (c.id === activeId ? " active" : "")}
               onClick={() => onSelect(c.id)}>
-              <Avatar url={u?.avatarUrl} name={convTitle(c, meId)} size={46} />
+              <Avatar url={convAvatarUrl(c, meId)} name={convTitle(c, meId)} size={46} />
               <div className="chat-conv-body">
                 <div className="chat-conv-top">
                   <span className="chat-conv-name">{convTitle(c, meId)}</span>
@@ -351,6 +423,7 @@ function ConvView({ conv, meId, onBack }) {
   const systemConv = isSystemConv(conv, meId);
   const [text, setText] = useState("");
   const [showAdd, setShowAdd] = useState(false);
+  const [showMembers, setShowMembers] = useState(false);
   const [lightbox, setLightbox] = useState(null);
   const scrollRef = useRef(null);
   const fileRef = useRef(null);
@@ -386,6 +459,13 @@ function ConvView({ conv, meId, onBack }) {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); doSend(); }
   };
 
+  // клик по имени в шапке: личный чат → профиль собеседника, группа → список участников
+  const openTitle = () => {
+    if (conv.type === "GROUP") { setShowMembers(true); return; }
+    const o = otherMember(conv, meId);
+    if (o?.user?.id) navigate(`/user/${o.user.id}`);
+  };
+
   // статус прочтения для личных чатов (по последнему моему сообщению)
   const otherRead = useMemo(() => {
     if (conv.type !== "DIRECT") return null;
@@ -400,13 +480,16 @@ function ConvView({ conv, meId, onBack }) {
     <section className="chat-main">
       <header className="chat-main-head">
         <button className="btn-icon chat-back" onClick={onBack} aria-label="Назад">‹</button>
-        <Avatar url={convAvatarUser(conv, meId)?.avatarUrl} name={convTitle(conv, meId)} size={38} />
-        <div className="chat-main-head-info">
-          <div className="chat-main-title">{convTitle(conv, meId)}</div>
-          <div className="chat-main-sub">
-            {conv.type === "GROUP" ? `${conv.members?.length || 0} участников` : `@${otherMember(conv, meId)?.user.username || ""}`}
+        <button type="button" className="chat-main-head-card" onClick={openTitle}
+          title={conv.type === "GROUP" ? "Участники группы" : "Открыть профиль"}>
+          <Avatar url={convAvatarUrl(conv, meId)} name={convTitle(conv, meId)} size={38} />
+          <div className="chat-main-head-info">
+            <div className="chat-main-title">{convTitle(conv, meId)}</div>
+            <div className="chat-main-sub">
+              {conv.type === "GROUP" ? `${conv.members?.length || 0} участников` : `@${otherMember(conv, meId)?.user.username || ""}`}
+            </div>
           </div>
-        </div>
+        </button>
         {conv.type === "GROUP" && (
           <div className="chat-main-actions">
             <button className="btn btn-ghost btn-sm" onClick={() => setShowAdd(true)}>Добавить</button>
@@ -422,9 +505,17 @@ function ConvView({ conv, meId, onBack }) {
         )}
         {list && list.length === 0 && <div className="chat-empty-sm" style={{ padding: 24 }}>Сообщений пока нет — напишите первым.</div>}
         {(list || []).map((m) => {
-          const mine = m.sender.id === meId;
           const day = fmtDay(m.createdAt);
           const showDay = day !== lastDay; lastDay = day;
+          if (m.service) {
+            return (
+              <div key={m.id}>
+                {showDay && <div className="chat-day">{day}</div>}
+                <div className="chat-service-msg">{m.content}</div>
+              </div>
+            );
+          }
+          const mine = m.sender.id === meId;
           const read = mine && otherRead != null && otherRead >= new Date(m.createdAt).getTime();
           return (
             <div key={m.id}>
@@ -475,6 +566,7 @@ function ConvView({ conv, meId, onBack }) {
       )}
 
       {showAdd && <AddMembersModal conv={conv} onClose={() => setShowAdd(false)} />}
+      {showMembers && <MembersModal conv={conv} meId={meId} onClose={() => setShowMembers(false)} />}
 
       {lightbox && (
         <div className="chat-lightbox" onClick={() => setLightbox(null)}>
@@ -511,6 +603,11 @@ export default function ChatsPage() {
     return () => chat?.setActive(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId]);
+
+  // заголовок вкладки: «Чат» в списке бесед, имя собеседника / название группы — в открытой
+  useEffect(() => {
+    document.title = activeConv ? convTitle(activeConv, meId) : "Чат";
+  }, [activeConv, meId]);
 
   const select = (cid) => navigate(`/chats/${cid}`);
 

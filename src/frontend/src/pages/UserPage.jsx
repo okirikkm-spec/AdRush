@@ -23,7 +23,7 @@ export default function UserPage() {
     return fetchUserProfile(id)
       .then((d) => {
         setData(d);
-        document.title = `${d.user.displayName} — AdRush`;
+        document.title = d.user.displayName;
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));

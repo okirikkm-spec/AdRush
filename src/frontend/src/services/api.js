@@ -306,6 +306,20 @@ export function addChatMembers(id, memberIds) {
 export function leaveChat(id) {
   return jsonRequest(`/api/chats/${id}/leave`, { method: "POST", auth: true });
 }
+/** Сменить фото группы (multipart). Возвращает обновлённую беседу. */
+export async function setChatAvatar(convId, file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${API_BASE}/api/chats/${convId}/avatar`, {
+    method: "POST", headers: authHeaders(), body: formData,
+  });
+  if (!res.ok) throw await parseError(res, "Не удалось обновить фото группы");
+  return res.json();
+}
+/** Переименовать группу. Возвращает обновлённую беседу. */
+export function renameChat(convId, title) {
+  return jsonRequest(`/api/chats/${convId}`, { method: "PUT", body: { title }, auth: true });
+}
 /** Отправить картинку в беседу (multipart). caption — необязательная подпись. */
 export async function sendChatImage(convId, file, caption) {
   const formData = new FormData();

@@ -24,7 +24,7 @@ export default function ProfilePage() {
   };
 
   useEffect(() => {
-    document.title = "Мой профиль — AdRush";
+    document.title = "Профиль";
     reload().finally(() => setLoading(false));
   }, []);
 
