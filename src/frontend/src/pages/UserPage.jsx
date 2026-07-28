@@ -7,8 +7,9 @@ import RatingStars from "../components/RatingStars";
 import BanModal from "../components/BanModal";
 import {
   fetchUserProfile, fetchMe, isAuthenticated,
-  deleteReviewAsAdmin, warnUser,
+  deleteReviewAsAdmin, warnUser, mediaUrl,
 } from "../services/api";
+import { coverStyle } from "../utils/coverStyle";
 
 export default function UserPage() {
   const { id } = useParams();
@@ -62,7 +63,16 @@ export default function UserPage() {
 
         {data && (
           <>
-            <div className="card">
+            {/* Мини-профиль с обложкой — та же вёрстка, что на своей странице профиля */}
+            <div className={`card profile-hero ${data.user.bannerUrl ? "has-banner" : ""}`}>
+              {data.user.bannerUrl && (
+                <img className="profile-hero-bg" src={mediaUrl(data.user.bannerUrl)} alt=""
+                  draggable={false}
+                  style={coverStyle(
+                    data.user.bannerFit === "contain" ? "contain" : "cover",
+                    data.user.bannerPos || "50% 50%")} />
+              )}
+
               <div className="profile-head" style={{ marginBottom: 0 }}>
                 <Avatar url={data.user.avatarUrl} name={data.user.displayName} size={72} />
                 <div>

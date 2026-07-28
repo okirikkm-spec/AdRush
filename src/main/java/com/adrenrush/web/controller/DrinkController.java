@@ -5,17 +5,15 @@ import com.adrenrush.web.entity.User;
 import com.adrenrush.web.enums.RoleEnum;
 import com.adrenrush.web.exception.ApiException;
 import com.adrenrush.web.service.DrinkService;
-import com.adrenrush.web.service.MonsterParserService;
 import com.adrenrush.web.service.ParserService;
 import com.adrenrush.web.service.RedBullParserService;
+import com.adrenrush.web.service.WorldSweetParserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -28,7 +26,7 @@ public class DrinkController {
     private final DrinkService drinkService;
     private final ParserService parserService;
     private final RedBullParserService redBullParserService;
-    private final MonsterParserService monsterParserService;
+    private final WorldSweetParserService worldSweetParserService;
 
     /** Все энергетики в порядке убывания оценки (для главной). */
     @GetMapping
@@ -127,14 +125,15 @@ public class DrinkController {
     }
 
     /**
-     * Список брендов с автоматическим парсером каталога (сами тянут с сайта) — для окна
-     * парсинга в админке. Monster сюда НЕ входит: его сайт за Cloudflare недоступен серверу,
-     * каталог загружается вручную через {@link #parseMonster}.
+     * Список источников с автоматическим парсером каталога (сами тянут с сайта) — для окна
+     * парсинга в админке. Monster берётся не с официального сайта (он за Cloudflare), а из
+     * каталога магазина worldsweet.ru — отсюда метка «Monster (WorldSweet)».
      */
     @GetMapping("/parse/sources")
     public ResponseEntity<List<String>> parseSources(@AuthenticationPrincipal User currentUser) {
         requireAdmin(currentUser);
-        return ResponseEntity.ok(List.of(ParserService.BRAND, RedBullParserService.BRAND));
+        return ResponseEntity.ok(List.of(
+            ParserService.BRAND, RedBullParserService.BRAND, WorldSweetParserService.SOURCE));
     }
 
     /**
@@ -165,30 +164,12 @@ public class DrinkController {
             created += r.created();
             updated += r.updated();
         }
+        if (brands.contains(WorldSweetParserService.SOURCE)) {
+            DrinkService.ParseResult r = worldSweetParserService.parse(reparse);
+            created += r.created();
+            updated += r.updated();
+        }
         return ResponseEntity.ok(Map.of("created", created, "updated", updated));
-    }
-
-    /**
-     * Парсинг каталога Monster из загруженного HTML-файла — только для администратора.
-     * Сайт Monster за Cloudflare Bot Management недоступен серверу напрямую (403-челлендж),
-     * поэтому администратор сохраняет страницу каталога в браузере и загружает HTML сюда.
-     */
-    @PostMapping("/parse/monster")
-    public ResponseEntity<Map<String, Object>> parseMonster(@AuthenticationPrincipal User currentUser,
-                                                            @RequestParam("file") MultipartFile file,
-                                                            @RequestParam(value = "reparse", defaultValue = "false") boolean reparse) {
-        requireAdmin(currentUser);
-        if (file == null || file.isEmpty()) {
-            throw ApiException.badRequest("Загрузите HTML-файл каталога Monster");
-        }
-        String html;
-        try {
-            html = new String(file.getBytes(), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            throw ApiException.badRequest("Не удалось прочитать загруженный файл");
-        }
-        DrinkService.ParseResult r = monsterParserService.parseHtml(html, reparse);
-        return ResponseEntity.ok(Map.of("created", r.created(), "updated", r.updated()));
     }
 
     private List<String> asStringList(Object raw) {

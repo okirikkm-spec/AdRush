@@ -21,6 +21,10 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class UserService {
 
+    /** Точка фокуса обложки: "NN% NN%". */
+    private static final java.util.regex.Pattern BANNER_POS =
+        java.util.regex.Pattern.compile("^\\d{1,3}% \\d{1,3}%$");
+
     private final UserRepository userRepository;
     private final ReviewService reviewService;
     private final StorageService storageService;
@@ -45,6 +49,71 @@ public class UserService {
 
     @Transactional
     public UserResponseDto updateAvatar(User user, MultipartFile file) {
+        String previous = user.getAvatarPath();
+        user.setAvatarPath(storeImage(user, file, "avatars", "Не удалось сохранить аватарку"));
+        userRepository.save(user);
+        discard(previous);
+        return UserResponseDto.from(user);
+    }
+
+    /** Обложка мини-профиля. Кадрирование можно задать тем же запросом. */
+    @Transactional
+    public UserResponseDto updateBanner(User user, MultipartFile file, String fit, String pos) {
+        String previous = user.getBannerPath();
+        // Папка намеренно называется covers, а не banners: блокировщики рекламы
+        // режут запросы к путям со словом "banner" — обложка не грузится у пользователя.
+        user.setBannerPath(storeImage(user, file, "covers", "Не удалось сохранить обложку"));
+        applyFraming(user, fit, pos);
+        userRepository.save(user);
+        discard(previous);
+        return UserResponseDto.from(user);
+    }
+
+    /** Изменить кадрирование, не трогая саму картинку. */
+    @Transactional
+    public UserResponseDto updateBannerFraming(User user, String fit, String pos) {
+        if (user.getBannerPath() == null) {
+            throw ApiException.badRequest("Обложка не загружена");
+        }
+        applyFraming(user, fit, pos);
+        userRepository.save(user);
+        return UserResponseDto.from(user);
+    }
+
+    @Transactional
+    public UserResponseDto removeBanner(User user) {
+        String previous = user.getBannerPath();
+        user.setBannerPath(null);
+        user.setBannerFit(null);
+        user.setBannerPos(null);
+        userRepository.save(user);
+        discard(previous);
+        return UserResponseDto.from(user);
+    }
+
+    /**
+     * Значения уходят во фронтовый inline-стиль, поэтому принимаем только
+     * заведомо безопасные: режим из белого списка и позицию строго "NN% NN%".
+     */
+    private void applyFraming(User user, String fit, String pos) {
+        user.setBannerFit("cover".equals(fit) ? "cover" : "contain");
+        user.setBannerPos(pos != null && BANNER_POS.matcher(pos).matches() ? pos : "50% 50%");
+    }
+
+    /**
+     * Убирает файл, на который больше никто не ссылается.
+     * Вызывается только после сохранения нового значения: если загрузка упала,
+     * прежняя картинка остаётся на месте. Ошибки удаления StorageService гасит
+     * сам — потерянный файл не повод заваливать запрос пользователю.
+     */
+    private void discard(String previousPath) {
+        if (previousPath != null && !previousPath.isBlank()) {
+            storageService.delete(previousPath);
+        }
+    }
+
+    /** Общая часть загрузки картинки: проверка типа, имя объекта, запись в хранилище. */
+    private String storeImage(User user, MultipartFile file, String folder, String errorMessage) {
         String contentType = file.getContentType();
         if (contentType == null || !contentType.startsWith("image/")) {
             throw ApiException.badRequest("Можно загружать только изображения");
@@ -52,15 +121,12 @@ public class UserService {
         String ext = contentType.substring(contentType.indexOf('/') + 1).replaceAll("[^a-zA-Z0-9]", "");
         if (ext.isBlank()) ext = "jpg";
 
-        String key = "avatars/" + user.getId() + "-" + System.currentTimeMillis() + "." + ext;
+        String key = folder + "/" + user.getId() + "-" + System.currentTimeMillis() + "." + ext;
         try {
-            String url = storageService.store(key, file.getInputStream(), contentType);
-            user.setAvatarPath(url);
-            userRepository.save(user);
+            return storageService.store(key, file.getInputStream(), contentType);
         } catch (Exception e) {
-            throw new ApiException(HttpStatus.INSUFFICIENT_STORAGE, "Не удалось сохранить аватарку");
+            throw new ApiException(HttpStatus.INSUFFICIENT_STORAGE, errorMessage);
         }
-        return UserResponseDto.from(user);
     }
 
     @Transactional

@@ -28,8 +28,13 @@ public class Drink {
     @Column(columnDefinition = "text")
     private String description;
 
-    /** Ссылка на исходную запись на drinks-energy.ru — ключ для дедупликации при парсинге. */
-    @Column(unique = true)
+    /**
+     * Ссылка на исходную запись у сайта-источника — ключ для дедупликации при парсинге.
+     * 512, а не стандартные 255: у worldsweet.ru кириллица в пути закодирована процентами и
+     * ссылки доходят до ~270 символов. Существующим базам колонку расширяет
+     * {@code DataInitializer.widenSourceUrlColumn()} — ddl-auto=update тип не меняет.
+     */
+    @Column(unique = true, length = 512)
     private String sourceUrl;
 
     /* ─── Кадрирование обложки (настраивает админ; null = значения по умолчанию) ─── */

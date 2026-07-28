@@ -492,7 +492,7 @@ a.mini-review-name:hover { color: var(--accent); }
   background: linear-gradient(to bottom, transparent, var(--bg));
   pointer-events: none; z-index: 2;
 }
-.drink-hero-track { display: flex; height: 100%; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+.drink-hero-track { display: flex; height: 100%; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; scrollbar-width: none; }
 .drink-hero-track::-webkit-scrollbar { display: none; }
 .drink-hero-track.draggable { cursor: grab; }
 .drink-hero-track.dragging { cursor: grabbing; scroll-snap-type: none; scroll-behavior: auto; }
@@ -565,7 +565,7 @@ a.mini-review-name:hover { color: var(--accent); }
   color: var(--text-faint); font-size: 15px;
 }
 .gallery-thumbs {
-  display: flex; gap: 10px; margin-top: 12px; overflow-x: auto; padding-bottom: 6px;
+  display: flex; gap: 10px; margin-top: 12px; overflow-x: auto; overflow-y: hidden; padding-bottom: 6px;
 }
 .gallery-thumb {
   flex-shrink: 0; width: 78px; height: 78px; border-radius: var(--radius-sm);
@@ -796,6 +796,49 @@ a.mini-review-name:hover { color: var(--accent); }
 }
 .card-title { font-size: 16px; font-weight: 700; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
 .profile-head { display: flex; align-items: center; gap: 18px; margin-bottom: 8px; }
+
+/* ── Мини-профиль с обложкой ──
+   Обложка — фон всей карточки; отступы и высота остаются как у обычной карточки. */
+.profile-hero { position: relative; overflow: hidden; }
+/* Обложка — обычный <img> под содержимым, как аватарка и превью в модалке:
+   одна и та же техника object-fit/object-position, поэтому предпросмотр
+   совпадает с результатом. CSS-фон для этого не годился. */
+.profile-hero-bg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  z-index: 0; pointer-events: none; user-select: none;
+}
+.profile-hero .profile-head,
+.profile-hero .row,
+.profile-hero .error-text { position: relative; z-index: 1; }
+/* Обложку не затемняем — читаемость текста держим тенью, а не заливкой поверх картинки */
+.profile-hero.has-banner,
+.profile-hero.has-banner .profile-name { color: #fff; }
+.profile-hero.has-banner .muted { color: rgba(255, 255, 255, .92); }
+.profile-hero.has-banner .profile-name,
+.profile-hero.has-banner .muted,
+.profile-hero.has-banner .profile-role { text-shadow: 0 1px 4px rgba(0, 0, 0, .75); }
+.profile-hero.has-banner .avatar,
+.profile-hero.has-banner .avatar-fallback {
+  border: 3px solid rgba(255, 255, 255, .85); box-sizing: content-box; margin-left: -3px;
+}
+.profile-hero-actions { position: absolute; top: 12px; right: 12px; display: flex; gap: 8px; z-index: 2; }
+/* Тёмное стекло — только поверх картинки. Без обложки кнопки обычные,
+   иначе на светлой карточке они выглядят инородно. */
+.profile-hero.has-banner .profile-hero-actions .btn {
+  background: rgba(0, 0, 0, .55); color: #fff; border: 1px solid rgba(255, 255, 255, .25);
+  backdrop-filter: blur(4px);
+}
+.profile-hero.has-banner .profile-hero-actions .btn:hover { background: rgba(0, 0, 0, .72); }
+
+/* Имя правится на своём же месте, а не в отдельном поле снизу */
+.profile-name-input {
+  font-family: var(--font); font-size: 22px; font-weight: 800; letter-spacing: -0.3px;
+  color: inherit; background: transparent; width: 100%; max-width: 280px;
+  border: none; border-bottom: 2px solid var(--border); outline: none; padding: 0 0 2px;
+}
+.profile-name-input:focus { border-bottom-color: var(--accent); }
+.profile-hero.has-banner .profile-name-input { border-bottom-color: rgba(255, 255, 255, .55); }
+.profile-name-input::placeholder { color: var(--text-faint); font-weight: 600; }
 .profile-name { font-size: 22px; font-weight: 800; }
 .profile-role {
   display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase;
@@ -857,19 +900,25 @@ a.mini-review-name:hover { color: var(--accent); }
 /* ─────────────── Admin ─────────────── */
 .admin-grid { display: grid; gap: 18px; }
 
-/* Вкладки-разделы админки */
-.admin-tabs {
+/* Вкладки-разделы: используются в админке, профиле и восстановлении пароля */
+.admin-tabs, .profile-tabs {
   display: flex; gap: 4px; margin-bottom: 22px;
-  border-bottom: 1px solid var(--border); overflow-x: auto;
+  /* overflow-y задан явно: рядом с overflow-x: auto значение visible
+     вычисляется в auto, и подчёркивание активной вкладки (1px) вылезает
+     за клиентскую высоту — браузер рисует вертикальный скроллбар. */
+  border-bottom: 1px solid var(--border); overflow-x: auto; overflow-y: hidden;
 }
-.admin-tab {
+.admin-tab, .profile-tab {
   display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
   padding: 11px 16px; background: none; border: none; cursor: pointer;
   color: var(--text-muted); font-weight: 600; font-size: 14px; font-family: var(--font);
   border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s, border-color .15s;
 }
-.admin-tab:hover { color: var(--text); }
-.admin-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.admin-tab:hover, .profile-tab:hover { color: var(--text); }
+.admin-tab.active, .profile-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* Модификатор: вкладки делят всю ширину поровну (узкие формы — например, вход/восстановление) */
+.tabs-fill .admin-tab, .tabs-fill .profile-tab { flex: 1; justify-content: center; }
 
 /* Сетка карточек внутри раздела «Каталог» */
 .admin-cards {
@@ -981,6 +1030,8 @@ a.mini-review-name:hover { color: var(--accent); }
 .framer-frame.draggable:active { cursor: grabbing; }
 .framer-card { aspect-ratio: 1 / 1; }
 .framer-modal { aspect-ratio: 16 / 10; }
+/* Пропорции мини-профиля: широкая и низкая плашка */
+.framer-banner { aspect-ratio: 7 / 1; touch-action: none; }
 .framer-empty {
   display: flex; align-items: center; justify-content: center; height: 100%;
   color: var(--text-faint); font-size: 28px;

@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.ApplicationArguments;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Component;
 
@@ -25,6 +26,7 @@ public class DataInitializer implements ApplicationRunner {
     private final DrinkService drinkService;
     private final ParserService parserService;
     private final SuperAdmins superAdmins;
+    private final JdbcTemplate jdbcTemplate;
 
     @Value("${admin.username:admin}")
     private String adminUsername;
@@ -37,11 +39,27 @@ public class DataInitializer implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
+        widenSourceUrlColumn();
         ensureSystemUser();
         ensureAdmin();
         promoteSuperAdmins();
         drinkService.backfillMissingBrands();
         firstRunParse();
+    }
+
+    /**
+     * Расширяет drinks.source_url до 512 символов. Нужно потому, что ddl-auto=update добавляет
+     * колонки, но НЕ меняет тип уже существующих: на базе, созданной до этой правки, колонка так и
+     * осталась бы varchar(255), и парсер worldsweet.ru падал бы на ссылках с процентной кириллицей
+     * (~270 символов). Идемпотентно: повторный ALTER на нужный тип ничего не меняет.
+     * {@code SET DATA TYPE} — общий синтаксис для PostgreSQL (прод) и H2 (профиль local).
+     */
+    private void widenSourceUrlColumn() {
+        try {
+            jdbcTemplate.execute("ALTER TABLE drinks ALTER COLUMN source_url SET DATA TYPE varchar(512)");
+        } catch (Exception e) {
+            log.warn("Не удалось расширить drinks.source_url до varchar(512): {}", e.getMessage());
+        }
     }
 
     /**

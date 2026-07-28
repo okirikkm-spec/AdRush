@@ -37,6 +37,15 @@ services:
       JWT_SECRET: ${JWT_SECRET:-adrenrush-super-secret-key-minimum-32-chars-long}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+      # SMTP для кода подтверждения почты. Пустой MAIL_HOST — письма не уходят,
+      # код пишется в лог контейнера (docker compose logs app).
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-465}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      MAIL_SSL: ${MAIL_SSL:-true}
+      MAIL_STARTTLS: ${MAIL_STARTTLS:-false}
     depends_on:
       - postgres
       - minio

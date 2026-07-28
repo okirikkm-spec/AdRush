@@ -15,9 +15,20 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** Логин (уникальный). Почта намеренно не используется. */
+    /** Логин (уникальный). Вход выполняется по нему, а не по почте. */
     @Column(nullable = false, unique = true)
     private String username;
+
+    /**
+     * Привязанная почта — записывается только после подтверждения кодом.
+     * unique: одна почта у одного аккаунта и один аккаунт на почту.
+     * Незавершённая привязка живёт отдельно — см. EmailVerification.
+     */
+    @Column(unique = true)
+    private String email;
+
+    /** Когда почта была подтверждена (null — почта не привязана). */
+    private Instant emailVerifiedAt;
 
     /** Отображаемое имя (может отличаться от логина). */
     private String displayName;
@@ -26,6 +37,16 @@ public class User {
     private String password;
 
     private String avatarPath;
+
+    /** Обложка (фон) мини-профиля. Публичная, как и аватарка. */
+    private String bannerPath;
+
+    /* Кадрирование обложки — как у обложек напитков: оригинал не режем,
+       храним режим вписывания и точку фокуса. null = значения по умолчанию. */
+    /** "cover" (заполнить) или "contain" (целиком). */
+    private String bannerFit;
+    /** background-position, например "50% 30%". */
+    private String bannerPos;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

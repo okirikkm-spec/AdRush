@@ -18,6 +18,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByUsername(String username);
     boolean existsByRole(RoleEnum role);
 
+    /** Привязанная (подтверждённая) почта — хранится в нижнем регистре. */
+    Optional<User> findByEmail(String email);
+    boolean existsByEmail(String email);
+
     /** Служебный аккаунт «Система» (единственный с system=true). */
     Optional<User> findBySystemTrue();
 

@@ -1,0 +1,42 @@
+# Что уезжает в контекст сборки. Docker'у нужны только pom.xml, src/main и исходники
+# src/frontend — node_modules, фронтовый build и jar собираются внутри образа (см. Dockerfile).
+# Без этого файла в демон уходило ~390 МБ лишнего (node_modules, uploads, graphify-out).
+
+### Зависимости и артефакты сборки ###
+**/node_modules/
+src/frontend/build/
+target/
+.mvn/
+mvnw
+mvnw.cmd
+
+### Секреты и локальные данные ###
+# .env компоузом передаётся как переменные окружения, внутри образа он не нужен и не должен там лежать.
+.env*
+!.env.example
+uploads/
+
+### Git и CI ###
+.git/
+.gitignore
+.gitattributes
+.github/
+
+### Инструменты разработчика ###
+.claude/
+.vscode/
+.idea/
+*.iml
+CLAUDE.md
+
+### Граф знаний, документация, отладочные артефакты ###
+graphify-out/
+DEPLOY.md
+README.md
+openapi.yaml
+deploy.sh
+docker-compose.yml
+Dockerfile
+build*.log
+npm-debug.log*
+redbull_dump.html

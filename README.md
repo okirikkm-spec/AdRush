@@ -17,9 +17,13 @@ TeachView: **Spring Boot (Java 21) + React + PostgreSQL + MinIO**, аутент�
   аутентификация (TOTP / Google Authenticator) с восстановлением пароля по коду,
   закрытый профиль, список своих отзывов и авто-тир-лист по оценкам.
 - **Роли** — `USER` и `ADMIN`. Админ добавляет карточки и запускает парсер.
-- **Парсер** — раз в сутки забирает последние записи с
-  [drinks-energy.ru](https://drinks-energy.ru/category/adrenaline-rush/) и заводит
-  карточки для новых напитков. При пустой базе делает полный первичный обход.
+- **Парсеры каталогов** — раз в сутки обходят источники и заводят карточки для новых
+  напитков (при пустой базе — полный первичный обход): официальные сайты
+  [adrenalinerush.ru](https://adrenalinerush.ru/) и
+  [redbull.com](https://www.redbull.com/ru-ru/energydrink), а Monster —
+  [каталог магазина worldsweet.ru](https://worldsweet.ru/napitki/energeticheskie/monster-2/)
+  (официальный сайт Monster закрыт Cloudflare для сервера). Один вкус в разных объёмах
+  и странах-изготовителях схлопывается в одну карточку.
 
 ## Запуск через Docker (рекомендуется)
 

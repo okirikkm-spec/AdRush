@@ -3,7 +3,10 @@ target/
 
 ### Spring Boot ###
 HELP.md
-.env
+# Все варианты .env с секретами (.env, .env.bak, .env.local …), кроме шаблона.
+# Шаблон .env оставляли открытым и раньше — важно, чтобы копии рядом с ним не утекли.
+.env*
+!.env.example
 
 ### Frontend ###
 src/frontend/node_modules/

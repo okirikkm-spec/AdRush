@@ -55,6 +55,17 @@ ssh adrush 'cd /opt/adrush && \
   ```
 - Локально: **Docker Desktop**.
 - На сервере: Docker + Compose, каталог `/opt/adrush` (клон репозитория), файл `/opt/adrush/.env` с секретами (БД/JWT/MinIO/админ), nginx + Let's Encrypt.
+- **SMTP** (код подтверждения при привязке почты в профиле) — переменные в том же `/opt/adrush/.env`:
+  ```
+  MAIL_HOST=smtp.yandex.ru      # пусто/не задано → письма не уходят, код пишется в лог
+  MAIL_PORT=465
+  MAIL_USERNAME=noreply@ваш-домен
+  MAIL_PASSWORD=пароль-приложения
+  MAIL_FROM=noreply@ваш-домен   # обычно обязан совпадать с MAIL_USERNAME
+  MAIL_SSL=true                 # 465 → SSL; для 587 поставь MAIL_SSL=false и MAIL_STARTTLS=true
+  MAIL_STARTTLS=false
+  ```
+  Проверить отправку после деплоя: привязать почту в профиле; при `MAIL_HOST=` код виден в `docker compose logs app`.
 - В `/opt/adrush/docker-compose.yml` порты postgres/minio/app привязаны к `127.0.0.1` (локальная правка клона; наружу только 80/443 через nginx).
 
 ---

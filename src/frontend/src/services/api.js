@@ -84,6 +84,19 @@ export async function login(username, password, code) {
 export function recoverPassword(username, code, newPassword) {
   return jsonRequest("/api/auth/recover", { method: "POST", body: { username, code, newPassword } });
 }
+/**
+ * Восстановление по почте (для аккаунтов без 2FA). Шаг 1 — выслать код.
+ * Возвращает { email: "i***i@gmail.com", expiresInSeconds, resendInSeconds, delivered }.
+ */
+export function requestRecoverEmailCode(username) {
+  return jsonRequest("/api/auth/recover/email/request", { method: "POST", body: { username } });
+}
+/** Шаг 2 — подтвердить код и задать новый пароль. */
+export function confirmRecoverEmail(username, code, newPassword) {
+  return jsonRequest("/api/auth/recover/email/confirm", {
+    method: "POST", body: { username, code, newPassword },
+  });
+}
 export function fetchMe() {
   return jsonRequest("/api/auth/me", { auth: true });
 }
@@ -96,6 +109,28 @@ export function changePassword(oldPassword, newPassword) {
 export function setPrivacy(isPrivate) {
   return jsonRequest("/api/auth/me/privacy", { method: "POST", body: { private: isPrivate }, auth: true });
 }
+/* ── Привязка почты ── */
+
+/** Текущее состояние: { email, verifiedAt, pending: { email, expiresInSeconds, resendInSeconds, attemptsLeft } | null }. */
+export function fetchEmailStatus() {
+  return jsonRequest("/api/auth/me/email", { auth: true });
+}
+/** Шаг 1: выслать код на адрес. Возвращает состояние заявки + delivered (false — SMTP не настроен). */
+export function requestEmailCode(email) {
+  return jsonRequest("/api/auth/me/email/request", { method: "POST", body: { email }, auth: true });
+}
+/** Шаг 2: подтвердить код и привязать почту. */
+export function confirmEmailCode(code) {
+  return jsonRequest("/api/auth/me/email/confirm", { method: "POST", body: { code }, auth: true });
+}
+export function cancelEmailBinding() {
+  return jsonRequest("/api/auth/me/email/cancel", { method: "POST", auth: true });
+}
+/** Отвязать почту — требуется пароль от аккаунта. */
+export function unbindEmail(password) {
+  return jsonRequest("/api/auth/me/email/unbind", { method: "POST", body: { password }, auth: true });
+}
+
 export function setup2fa() {
   return jsonRequest("/api/auth/2fa/setup", { method: "POST", auth: true });
 }
@@ -116,6 +151,30 @@ export async function uploadAvatar(file) {
   });
   if (!res.ok) throw await parseError(res, "Ошибка загрузки аватарки");
   return res.json();
+}
+
+/** Обложка (фон) мини-профиля. fit/pos — кадрирование, сохраняется вместе с картинкой. */
+export async function uploadBanner(file, { fit, pos } = {}) {
+  const formData = new FormData();
+  formData.append("file", file);
+  if (fit) formData.append("fit", fit);
+  if (pos) formData.append("pos", pos);
+  const res = await fetch(`${API_BASE}/api/auth/me/banner`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: formData,
+  });
+  if (!res.ok) throw await parseError(res, "Ошибка загрузки обложки");
+  return res.json();
+}
+/** Изменить кадрирование, не перезагружая картинку. */
+export function updateBannerFraming({ fit, pos }) {
+  return jsonRequest("/api/auth/me/banner/framing", {
+    method: "PUT", body: { fit, pos }, auth: true,
+  });
+}
+export function removeBanner() {
+  return jsonRequest("/api/auth/me/banner", { method: "DELETE", auth: true });
 }
 
 /* ─────────────── Энергетики ─────────────── */
@@ -160,22 +219,6 @@ export function runParse({ brands, reparse = false }) {
  */
 export function optimizeMedia() {
   return jsonRequest(`/api/drinks/media/optimize`, { method: "POST", auth: true });
-}
-/**
- * Загрузить сохранённый HTML каталога Monster (парсится на сервере).
- * reparse=false — только новые карточки; true — обновить и существующие.
- */
-export async function uploadMonsterCatalog(file, reparse = false) {
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("reparse", reparse);
-  const res = await fetch(`${API_BASE}/api/drinks/parse/monster`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: formData,
-  });
-  if (!res.ok) throw await parseError(res, "Ошибка загрузки каталога Monster");
-  return res.json();
 }
 export async function addDrinkPhoto(id, file) {
   const formData = new FormData();

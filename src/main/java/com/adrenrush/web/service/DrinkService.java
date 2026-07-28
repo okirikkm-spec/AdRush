@@ -71,6 +71,20 @@ public class DrinkService {
     /** Итог обработки одной спарсенной записи. */
     public enum ParseOutcome { CREATED, UPDATED, SKIPPED }
 
+    /** Уже заведённая карточка глазами парсера — чтобы он не создавал её повторно из другого источника. */
+    public record ExistingDrink(Long id, String name, String brand, String sourceUrl) {}
+
+    /**
+     * Все карточки каталога в «плоском» виде — для сверки парсером: один и тот же напиток есть на
+     * разных сайтах, и дедупликация по {@code sourceUrl} его не ловит (ссылки разные).
+     */
+    @Transactional(readOnly = true)
+    public List<ExistingDrink> listExisting() {
+        return drinkRepository.findAll().stream()
+            .map(d -> new ExistingDrink(d.getId(), d.getName(), d.getBrand(), d.getSourceUrl()))
+            .toList();
+    }
+
     /** Сводка прохода парсера: сколько карточек создано и сколько обновлено. */
     public record ParseResult(int created, int updated) {}
 
@@ -140,7 +154,7 @@ public class DrinkService {
         String s = (sourceUrl == null ? "" : sourceUrl).toLowerCase(Locale.ROOT);
         String n = (name == null ? "" : name).toLowerCase(Locale.ROOT);
         if (s.contains("monster") || n.startsWith("monster") || n.contains("monster")) {
-            return MonsterParserService.BRAND;
+            return "Monster";
         }
         if (s.contains("redbull") || s.contains("red-bull") || n.startsWith("red bull") || n.contains("red bull")) {
             return RedBullParserService.BRAND;

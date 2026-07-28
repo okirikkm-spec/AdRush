@@ -226,6 +226,121 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /api/auth/me/email:
+    get:
+      tags: [Auth]
+      summary: Состояние привязки почты
+      description: |
+        Привязанная почта и незавершённая заявка на подтверждение.
+        Почта отдаётся только владельцу — в публичном профиле (`GET /api/users/{id}`) её нет.
+      responses:
+        '200':
+          description: Состояние привязки
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/auth/me/email/request:
+    post:
+      tags: [Auth]
+      summary: Выслать код подтверждения на почту
+      description: |
+        Шаг 1 привязки. Код из 6 цифр действует 15 минут, следующее письмо —
+        не раньше чем через 60 секунд (пауза общая, смена адреса её не сбрасывает).
+        Одна почта может быть привязана только к одному аккаунту.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailRequest'
+      responses:
+        '200':
+          description: Письмо отправлено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailPending'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Почта занята другим аккаунтом или подтверждается им прямо сейчас
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/auth/me/email/confirm:
+    post:
+      tags: [Auth]
+      summary: Подтвердить код и привязать почту
+      description: Шаг 2 привязки. Не более 5 попыток ввода, дальше нужен новый код.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailConfirmRequest'
+      responses:
+        '200':
+          description: Почта привязана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailStatus'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Почту успели привязать к другому аккаунту
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/auth/me/email/cancel:
+    post:
+      tags: [Auth]
+      summary: Отменить незавершённую привязку
+      responses:
+        '200':
+          description: Заявка отменена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/auth/me/email/unbind:
+    post:
+      tags: [Auth]
+      summary: Отвязать почту от аккаунта
+      description: Требует пароль от аккаунта. После отвязки адрес снова свободен.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailUnbindRequest'
+      responses:
+        '200':
+          description: Почта отвязана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailStatus'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
   /api/auth/2fa/setup:
     post:
       tags: [Auth]
@@ -541,18 +656,20 @@ paths:
   /api/drinks/parse/sources:
     get:
       tags: [Drinks]
-      summary: Бренды с авто-парсером каталога (только админ)
-      description: Monster сюда не входит — его каталог загружается вручную через `/api/drinks/parse/monster`.
+      summary: Источники с авто-парсером каталога (только админ)
+      description: >
+        Monster берётся не с официального сайта (он за Cloudflare), а из каталога магазина
+        worldsweet.ru — источник «Monster (WorldSweet)».
       responses:
         '200':
-          description: Список брендов
+          description: Список источников
           content:
             application/json:
               schema:
                 type: array
                 items:
                   type: string
-                example: ["Adrenaline Rush", "Red Bull"]
+                example: ["Adrenaline Rush", "Red Bull", "Monster (WorldSweet)"]
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -566,41 +683,6 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/ParseRequest'
-      responses:
-        '200':
-          description: Сколько карточек создано/обновлено
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ParseResult'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-
-  /api/drinks/parse/monster:
-    post:
-      tags: [Drinks]
-      summary: Парсинг каталога Monster из загруженного HTML (только админ)
-      description: >
-        Сайт Monster за Cloudflare недоступен серверу напрямую, поэтому администратор сохраняет
-        страницу каталога в браузере и загружает HTML сюда.
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              required: [file]
-              properties:
-                file:
-                  type: string
-                  format: binary
-                  description: HTML-файл каталога Monster
-                reparse:
-                  type: boolean
-                  default: false
-                  description: true — обновить и существующие карточки
       responses:
         '200':
           description: Сколько карточек создано/обновлено
@@ -1934,6 +2016,78 @@ components:
           type: string
       required: [code]
 
+    EmailRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          description: Приводится к нижнему регистру и обрезается по краям.
+          example: you@example.com
+      required: [email]
+
+    EmailConfirmRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          description: 6 цифр из письма.
+          example: "247512"
+      required: [code]
+
+    EmailUnbindRequest:
+      type: object
+      properties:
+        password:
+          type: string
+          description: Пароль от аккаунта — подтверждает отвязку.
+      required: [password]
+
+    EmailPending:
+      type: object
+      description: Незавершённая заявка на привязку.
+      properties:
+        email:
+          type: string
+          format: email
+        expiresInSeconds:
+          type: integer
+          description: Сколько ещё действует код.
+          example: 899
+        resendInSeconds:
+          type: integer
+          description: Сколько ждать до следующего письма (0 — можно отправлять).
+          example: 59
+        attemptsLeft:
+          type: integer
+          description: Сколько осталось попыток ввода кода.
+          example: 5
+        delivered:
+          type: boolean
+          description: |
+            Только в ответе `/request`. `false` — SMTP на сервере не настроен,
+            письмо не ушло, код записан в лог приложения.
+      required: [email, expiresInSeconds, resendInSeconds, attemptsLeft]
+
+    EmailStatus:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          nullable: true
+          description: Привязанная почта; `null` — не привязана.
+        verifiedAt:
+          type: string
+          format: date-time
+          nullable: true
+        pending:
+          allOf:
+            - $ref: '#/components/schemas/EmailPending'
+          nullable: true
+          description: Незавершённая заявка либо `null`.
+      required: [email, verifiedAt, pending]
+
     CreateDrinkRequest:
       type: object
       properties:
@@ -1993,7 +2147,7 @@ components:
           type: array
           items:
             type: string
-          description: Бренды из /api/drinks/parse/sources
+          description: Источники (бренды/каталоги) из /api/drinks/parse/sources
         reparse:
           type: boolean
           default: false

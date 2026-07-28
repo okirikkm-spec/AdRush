@@ -21,9 +21,9 @@ import java.util.concurrent.TimeUnit;
 /**
  * Парсер ассортимента Red Bull с официального сайта redbull.com/ru-ru/energydrink.
  *
- * Работает как «адреналиновый» {@link ParserService} (а не как ручной {@link MonsterParserService}):
- * сам ходит в сеть, серверно-рендеренная страница (Next.js App Router) отдаёт карточки товаров
- * прямо в HTML, парсер их разбирает по расписанию и качает обложки в наше хранилище.
+ * Работает как «адреналиновый» {@link ParserService}: сам ходит в сеть, серверно-рендеренная
+ * страница (Next.js App Router) отдаёт карточки товаров прямо в HTML, парсер их разбирает по
+ * расписанию и качает обложки в наше хранилище.
  *
  * Карточки лежат в карусели {@code #products}: ссылка {@code a.product-rail_card} с href на
  * страницу товара, заголовок {@code h3.product-rail_product-label} (бренд+вкус) и картинка-пэкшот
@@ -38,8 +38,8 @@ import java.util.concurrent.TimeUnit;
  * Важно: страница за Akamai Bot Manager, который блокирует Java-клиента по TLS-фингерпринту (JA3) и
  * отдаёт ему 403 даже с браузерными заголовками. Поэтому HTML качаем системным curl (его TLS Akamai
  * пропускает) — см. {@link #fetchViaCurl}, — а Jsoup используем только для разбора DOM. С
- * дата-центрового IP боевого сервера Akamai всё равно может вернуть 403 (как Cloudflare у Monster) —
- * тогда понадобится резидентный прокси.
+ * дата-центрового IP боевого сервера Akamai всё равно может вернуть 403 — тогда понадобится
+ * резидентный прокси (или каталог WorldSweet, см. {@link WorldSweetParserService}).
  */
 @Service
 @RequiredArgsConstructor
