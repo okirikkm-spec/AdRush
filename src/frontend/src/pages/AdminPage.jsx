@@ -144,7 +144,7 @@ function MediaOptimizeCard() {
     try {
       const r = await optimizeMedia();
       setMsg(`Готово. Скачано: ${r.downloaded} · превью: ${r.thumbnailed} · `
-        + `пропущено: ${r.skipped} · ошибок: ${r.failed}`);
+        + `вырезан фон: ${r.debackgrounded ?? 0} · пропущено: ${r.skipped} · ошибок: ${r.failed}`);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -156,9 +156,10 @@ function MediaOptimizeCard() {
     <div className="card">
       <div className="card-title">🖼️ Оптимизация изображений</div>
       <div className="badge-info" style={{ marginBottom: 14 }}>
-        Скачивает внешние картинки (Monster и т.п.) в наше хранилище и создаёт лёгкие превью —
-        карточки на главной грузятся быстрее. Внешние ссылки за Cloudflare/CDN могут не скачаться
-        с боевого сервера (попадут в «ошибки») — тогда запускайте там, где сайт-источник доступен.
+        Скачивает внешние картинки в наше хранилище, создаёт лёгкие превью и вырезает белый фон
+        у обложек из каталогов (у уже скачанных — задним числом). Внешние ссылки за Cloudflare/CDN
+        могут не скачаться с боевого сервера (попадут в «ошибки») — тогда запускайте там, где
+        сайт-источник доступен.
       </div>
       <button className="btn btn-primary" onClick={run} disabled={busy}>
         {busy ? "Обработка…" : "Оптимизировать медиа"}

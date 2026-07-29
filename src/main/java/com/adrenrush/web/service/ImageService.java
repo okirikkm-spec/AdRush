@@ -5,11 +5,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.Optional;
 
-/** Генерация уменьшенных превью изображений (для карточек на главной и миниатюр галереи). */
+/** Обработка изображений каталога: превью для карточек и вырезание белого фона у пэкшотов. */
 @Service
 public class ImageService {
 
@@ -17,6 +21,23 @@ public class ImageService {
 
     /** Максимальная сторона превью в пикселях — с запасом под сетку карточек/ретину. */
     public static final int THUMB_MAX_DIM = 600;
+
+    /**
+     * Фоном считаем пиксель не темнее этого по каждому каналу. 232, а не 255: у JPEG студийный
+     * белый «плавает» из-за компрессии, а у пэкшотов бывает лёгкий градиент подложки.
+     */
+    private static final int BG_MIN_CHANNEL = 232;
+    /** …и при этом почти серый: большой разброс каналов означает цветной фон, а не белый. */
+    private static final int BG_MAX_SPREAD = 18;
+    /** Кайма: соседний с фоном пиксель светлее этого гасим частично — иначе край банки «рваный». */
+    private static final int EDGE_MIN_CHANNEL = 200;
+    /** Сколько граничных пикселей должно быть белыми, чтобы вообще браться за картинку. */
+    private static final double MIN_BORDER_WHITE_RATIO = 0.7;
+    /** Меньше этой доли фона — вырезать нечего; больше — картинка почти пустая, это не пэкшот. */
+    private static final double MIN_BACKGROUND_RATIO = 0.02;
+    private static final double MAX_BACKGROUND_RATIO = 0.97;
+    /** Дальше этого размера не идём: заливка держит в памяти маску на каждый пиксель. */
+    private static final int MAX_PIXELS = 40_000_000;
 
     /**
      * Делает превью из байтов изображения. Возвращает пусто, если формат не поддержан
@@ -42,5 +63,228 @@ public class ImageService {
             log.debug("Превью не сгенерировано (формат {}): {}", outputFormat, e.getMessage());
             return Optional.empty();
         }
+    }
+
+    /**
+     * Делает белый фон пэкшота прозрачным и возвращает PNG.
+     *
+     * Убирается именно ФОН, а не белый цвет: заливка идёт от краёв изображения внутрь и
+     * останавливается на первом небелом пикселе, поэтому белая крышка, надписи и блики на самой
+     * банке остаются на месте — до них заливка не доходит, они окружены цветом. Пиксели на стыке
+     * гасятся частично (по «белизне»), иначе контур получается ступенчатым.
+     *
+     * Возвращает пусто, когда трогать картинку не нужно или опасно: формат не читается, фон уже
+     * прозрачный, рамка не белая (фото на цветном фоне), удалять почти нечего либо, наоборот,
+     * «фоном» оказалась почти вся картинка.
+     */
+    public Optional<byte[]> removeWhiteBackground(byte[] source) {
+        if (source == null || source.length == 0) return Optional.empty();
+        try {
+            BufferedImage src = ImageIO.read(new ByteArrayInputStream(source));
+            if (src == null) return Optional.empty();
+
+            int w = src.getWidth();
+            int h = src.getHeight();
+            if (w < 8 || h < 8 || (long) w * h > MAX_PIXELS) return Optional.empty();
+
+            int[] px = src.getRGB(0, 0, w, h, null, 0, w);
+            if (hasTransparentPixels(src, px)) return Optional.empty();
+            if (borderWhiteRatio(px, w, h) < MIN_BORDER_WHITE_RATIO) return Optional.empty();
+
+            boolean[] background = floodFillFromBorder(px, w, h);
+            int cut = 0;
+            for (boolean b : background) if (b) cut++;
+
+            double ratio = (double) cut / px.length;
+            if (ratio < MIN_BACKGROUND_RATIO || ratio > MAX_BACKGROUND_RATIO) return Optional.empty();
+
+            applyTransparency(px, smoothAlpha(buildAlpha(px, background, w, h), w, h), w, h);
+            posterize(px);
+
+            BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+            out.setRGB(0, 0, w, h, px, 0, w);
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            if (!ImageIO.write(out, "png", bytes)) return Optional.empty();
+            return Optional.of(bytes.toByteArray());
+        } catch (Exception e) {
+            log.debug("Фон не вырезан: {}", e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    /** Картинка уже с прозрачностью — значит фон убирали раньше, второй раз не трогаем. */
+    private boolean hasTransparentPixels(BufferedImage src, int[] px) {
+        if (!src.getColorModel().hasAlpha()) return false;
+        for (int p : px) {
+            if ((p >>> 24) < 250) return true;
+        }
+        return false;
+    }
+
+    /** Доля белых пикселей по рамке изображения: у пэкшота на белом она близка к единице. */
+    private double borderWhiteRatio(int[] px, int w, int h) {
+        int white = 0;
+        int total = 0;
+        for (int x = 0; x < w; x++) {
+            if (isBackgroundWhite(px[x])) white++;
+            if (isBackgroundWhite(px[(h - 1) * w + x])) white++;
+            total += 2;
+        }
+        for (int y = 1; y < h - 1; y++) {
+            if (isBackgroundWhite(px[y * w])) white++;
+            if (isBackgroundWhite(px[y * w + w - 1])) white++;
+            total += 2;
+        }
+        return total == 0 ? 0 : (double) white / total;
+    }
+
+    /**
+     * Заливка белого от краёв внутрь (обход в ширину по 4 соседям). Именно она отличает фон от
+     * белого на самом напитке: до внутренних белых областей волна не доходит, её останавливает
+     * цветной контур банки.
+     */
+    private boolean[] floodFillFromBorder(int[] px, int w, int h) {
+        boolean[] background = new boolean[px.length];
+        Deque<Integer> queue = new ArrayDeque<>();
+
+        for (int x = 0; x < w; x++) {
+            enqueueIfWhite(px, background, queue, x);
+            enqueueIfWhite(px, background, queue, (h - 1) * w + x);
+        }
+        for (int y = 0; y < h; y++) {
+            enqueueIfWhite(px, background, queue, y * w);
+            enqueueIfWhite(px, background, queue, y * w + w - 1);
+        }
+
+        while (!queue.isEmpty()) {
+            int idx = queue.poll();
+            int x = idx % w;
+            int y = idx / w;
+            if (x > 0) enqueueIfWhite(px, background, queue, idx - 1);
+            if (x < w - 1) enqueueIfWhite(px, background, queue, idx + 1);
+            if (y > 0) enqueueIfWhite(px, background, queue, idx - w);
+            if (y < h - 1) enqueueIfWhite(px, background, queue, idx + w);
+        }
+        return background;
+    }
+
+    private void enqueueIfWhite(int[] px, boolean[] background, Deque<Integer> queue, int idx) {
+        if (background[idx] || !isBackgroundWhite(px[idx])) return;
+        background[idx] = true;
+        queue.add(idx);
+    }
+
+    /**
+     * Считает альфу каждого пикселя: фон — 0, объект — 255, а светлый ореол вдоль контура (след
+     * белой подложки, размазанный компрессией) — промежуточные значения, тем меньше, чем пиксель
+     * белее. Без этого шага вокруг банки остаётся светлая обводка.
+     */
+    private int[] buildAlpha(int[] px, boolean[] background, int w, int h) {
+        int[] alpha = new int[px.length];
+        for (int idx = 0; idx < px.length; idx++) {
+            if (background[idx]) continue;
+            int min = minChannel(px[idx]);
+            if (min >= EDGE_MIN_CHANNEL && touchesBackground(background, idx, w, h)) {
+                alpha[idx] = Math.round(255f * (255 - min) / (255f - EDGE_MIN_CHANNEL));
+            } else {
+                alpha[idx] = 255;
+            }
+        }
+        return alpha;
+    }
+
+    /**
+     * Сглаживает край: заливка даёт жёсткую маску «фон/не фон», из-за чего наклонные бока банки
+     * идут заметной лесенкой. Свёртка 3×3 (гауссовы веса 1-2-1) размывает ТОЛЬКО приграничную
+     * полосу — внутри объекта и в глубине фона все соседи одинаковы, и значение не меняется.
+     */
+    private int[] smoothAlpha(int[] alpha, int w, int h) {
+        int[] out = alpha.clone();
+        for (int y = 1; y < h - 1; y++) {
+            for (int x = 1; x < w - 1; x++) {
+                int idx = y * w + x;
+                if (!isNearEdge(alpha, idx, w)) continue;
+                int sum = alpha[idx - w - 1] + 2 * alpha[idx - w] + alpha[idx - w + 1]
+                    + 2 * alpha[idx - 1] + 4 * alpha[idx] + 2 * alpha[idx + 1]
+                    + alpha[idx + w - 1] + 2 * alpha[idx + w] + alpha[idx + w + 1];
+                out[idx] = sum / 16;
+            }
+        }
+        return out;
+    }
+
+    /** Пиксель у границы — если среди 8 соседей есть и прозрачный, и непрозрачный. */
+    private boolean isNearEdge(int[] alpha, int idx, int w) {
+        int min = 255;
+        int max = 0;
+        for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                int a = alpha[idx + dy * w + dx];
+                if (a < min) min = a;
+                if (a > max) max = a;
+            }
+        }
+        return max - min > 8;
+    }
+
+    /**
+     * Проставляет альфу и убирает из полупрозрачных пикселей примешанный белый. На контуре цвет —
+     * это смесь банки и подложки ({@code c = a·объект + (1−a)·белый}), поэтому объект
+     * восстанавливается обратной формулой. Иначе край выглядит выцветшим: чем прозрачнее пиксель,
+     * тем сильнее он был бы разбавлен белым.
+     */
+    private void applyTransparency(int[] px, int[] alpha, int w, int h) {
+        for (int idx = 0; idx < px.length; idx++) {
+            int a = alpha[idx];
+            if (a >= 255) continue;
+            if (a <= 0) {
+                px[idx] = px[idx] & 0x00FFFFFF;
+                continue;
+            }
+            int r = unmixWhite((px[idx] >> 16) & 0xFF, a);
+            int g = unmixWhite((px[idx] >> 8) & 0xFF, a);
+            int b = unmixWhite(px[idx] & 0xFF, a);
+            px[idx] = (a << 24) | (r << 16) | (g << 8) | b;
+        }
+    }
+
+    /** Обратная формула смешивания с белым, с защитой от выхода за диапазон. */
+    private int unmixWhite(int channel, int alpha) {
+        int value = Math.round((channel - 255f * (255 - alpha) / 255f) * 255f / alpha);
+        return Math.max(0, Math.min(255, value));
+    }
+
+    /**
+     * Округляет каналы до 6 бит. PNG с прозрачностью в разы тяжелее исходного JPEG, а больше всего
+     * весит шум компрессии: после округления соседние пиксели чаще совпадают и файл сжимается
+     * примерно на треть. Глазом разница не видна — проверено на пэкшотах с градиентами.
+     */
+    private void posterize(int[] px) {
+        for (int i = 0; i < px.length; i++) {
+            px[i] = (px[i] & 0xFF000000) | (px[i] & 0x00FCFCFC);
+        }
+    }
+
+    private boolean touchesBackground(boolean[] background, int idx, int w, int h) {
+        int x = idx % w;
+        int y = idx / w;
+        return (x > 0 && background[idx - 1])
+            || (x < w - 1 && background[idx + 1])
+            || (y > 0 && background[idx - w])
+            || (y < h - 1 && background[idx + w]);
+    }
+
+    /** Светлый и без выраженного цветового оттенка — таким бывает студийная подложка. */
+    private boolean isBackgroundWhite(int argb) {
+        int r = (argb >> 16) & 0xFF;
+        int g = (argb >> 8) & 0xFF;
+        int b = argb & 0xFF;
+        int min = Math.min(r, Math.min(g, b));
+        int max = Math.max(r, Math.max(g, b));
+        return min >= BG_MIN_CHANNEL && (max - min) <= BG_MAX_SPREAD;
+    }
+
+    private int minChannel(int argb) {
+        return Math.min((argb >> 16) & 0xFF, Math.min((argb >> 8) & 0xFF, argb & 0xFF));
     }
 }

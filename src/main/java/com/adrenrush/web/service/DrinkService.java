@@ -16,6 +16,7 @@ import org.jsoup.Connection;
 import org.jsoup.Jsoup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,6 +46,13 @@ public class DrinkService {
     private final StorageService storageService;
     private final ImageService imageService;
     private final AuditService auditService;
+
+    /**
+     * Вырезать ли белый фон у обложек из каталогов-источников. Пэкшоты магазинов сняты на белой
+     * подложке, а сайт тёмный — без прозрачности банка сидит в белом прямоугольнике.
+     */
+    @Value("${media.remove-white-background:true}")
+    private boolean removeWhiteBackground;
 
     /** Список всех энергетиков, отсортированный по средней оценке (по убыванию). */
     @Transactional(readOnly = true)
@@ -308,31 +316,34 @@ public class DrinkService {
     }
 
     /** Сводка прохода оптимизации медиа. */
-    public record MediaOptimizeResult(int downloaded, int thumbnailed, int skipped, int failed) {}
+    public record MediaOptimizeResult(int downloaded, int thumbnailed, int debackgrounded, int skipped, int failed) {}
 
-    private enum PhotoOutcome { DOWNLOADED, THUMBNAILED, SKIPPED, FAILED }
+    private enum PhotoOutcome { DOWNLOADED, THUMBNAILED, DEBACKGROUNDED, SKIPPED, FAILED }
 
     /**
      * Разовая оптимизация медиа (админ-операция):
      *  1) внешние картинки (Monster CDN и т.п.) скачиваются в наше хранилище — грузятся быстрее и не зависят от CDN;
-     *  2) для уже сохранённых фото без превью оно достраивается.
+     *  2) у обложек из каталогов вырезается белый фон (для уже скачанных раньше — задним числом);
+     *  3) для уже сохранённых фото без превью оно достраивается.
      * Внимание: на боевом сервере скачивание Monster может упираться в Cloudflare/CDN-троттлинг —
      * такие фото останутся внешними ссылками (попадут в «ошибки»), запускать лучше там, где CDN доступен.
      */
     public MediaOptimizeResult optimizeMedia(User actor) {
-        int downloaded = 0, thumbnailed = 0, skipped = 0, failed = 0;
+        int downloaded = 0, thumbnailed = 0, debackgrounded = 0, skipped = 0, failed = 0;
         for (Long id : photoRepository.findAllIds()) {
             switch (optimizePhoto(id)) {
                 case DOWNLOADED -> downloaded++;
                 case THUMBNAILED -> thumbnailed++;
+                case DEBACKGROUNDED -> debackgrounded++;
                 case SKIPPED -> skipped++;
                 case FAILED -> failed++;
             }
         }
         auditService.record(actor, AuditAction.DRINK_UPDATE, AuditTargetType.DRINK, null, "Медиа",
             "Оптимизация медиа: скачано " + downloaded + ", превью " + thumbnailed
+                + ", вырезан фон " + debackgrounded
                 + ", пропущено " + skipped + ", ошибок " + failed);
-        return new MediaOptimizeResult(downloaded, thumbnailed, skipped, failed);
+        return new MediaOptimizeResult(downloaded, thumbnailed, debackgrounded, skipped, failed);
     }
 
     /**
@@ -347,11 +358,14 @@ public class DrinkService {
         try {
             if (external) {
                 Long drinkId = photoRepository.findDrinkIdById(photoId);
-                StoredImage stored = fetchAndStore("photos/" + drinkId, url);
+                StoredImage stored = fetchAndStore("photos/" + drinkId, url, photo.getSource() == PhotoSource.PARSED);
                 photo.setUrl(stored.url());
                 photo.setThumbUrl(stored.thumbUrl());
                 photoRepository.save(photo);
                 return PhotoOutcome.DOWNLOADED;
+            }
+            if (photo.getSource() == PhotoSource.PARSED && cutBackgroundInPlace(photo)) {
+                return PhotoOutcome.DEBACKGROUNDED;
             }
             if (photo.getThumbUrl() == null) {
                 String key = storageKeyOf(url);
@@ -370,6 +384,41 @@ public class DrinkService {
             log.warn("optimizeMedia: фото {} ({}) — {}", photoId, url, e.getMessage());
             return PhotoOutcome.FAILED;
         }
+    }
+
+    /**
+     * Вырезает белый фон у уже лежащей в хранилище обложки: результат кладётся новым PNG-файлом
+     * (вместе с превью), а старые файлы удаляются. Прежняя картинка не перезаписывается по тому же
+     * ключу — иначе у пользователей остались бы закэшированные браузером старые версии
+     * ({@code /media/**} отдаётся с длинным кэшем).
+     *
+     * @return true — фон вырезан и фото переписано; false — трогать нечего (фон не белый, уже
+     *         прозрачный, формат не читается)
+     */
+    private boolean cutBackgroundInPlace(DrinkPhoto photo) throws Exception {
+        if (!removeWhiteBackground) return false;
+        String oldUrl = photo.getUrl();
+        String oldThumbUrl = photo.getThumbUrl();
+        String key = storageKeyOf(oldUrl);
+        if (key == null) return false;
+        byte[] data = storageService.readBytes(oldUrl);
+        if (data == null) return false;
+
+        Optional<byte[]> cut = imageService.removeWhiteBackground(data);
+        if (cut.isEmpty()) return false;
+
+        int dot = key.lastIndexOf('.');
+        String newKey = (dot >= 0 ? key.substring(0, dot) : key) + "-nobg.png";
+        StoredImage stored = storeImage(newKey, cut.get(), "image/png");
+        photo.setUrl(stored.url());
+        photo.setThumbUrl(stored.thumbUrl());
+        photoRepository.save(photo);
+
+        storageService.delete(oldUrl);
+        if (oldThumbUrl != null) storageService.delete(oldThumbUrl);
+        log.info("Оптимизация медиа: у фото #{} вырезан белый фон ({} → {})",
+            photo.getId(), oldUrl, stored.url());
+        return true;
     }
 
     private String describeDescChange(String oldDesc, String newDesc) {
@@ -435,10 +484,14 @@ public class DrinkService {
         return getById(drinkId);
     }
 
-    /** Скачивает изображение по ссылке в хранилище (с превью); при сбое — оставляет внешнюю ссылку. */
+    /**
+     * Скачивает изображение по ссылке в хранилище (с превью); при сбое — оставляет внешнюю ссылку.
+     * У обложек из каталогов ({@link PhotoSource#PARSED}) заодно вырезается белый фон — это
+     * студийные пэкшоты на белом; пользовательские фото не трогаем, там фон осмысленный.
+     */
     private void addRemotePhoto(Drink drink, String url, PhotoSource source, User uploader) {
         try {
-            StoredImage stored = fetchAndStore("photos/" + drink.getId(), url);
+            StoredImage stored = fetchAndStore("photos/" + drink.getId(), url, source == PhotoSource.PARSED);
             addPhoto(drink, stored.url(), stored.thumbUrl(), source, uploader);
         } catch (Exception e) {
             log.warn("Не удалось скачать изображение {} ({}) — сохраняю внешнюю ссылку", url, e.getMessage());
@@ -449,8 +502,18 @@ public class DrinkService {
     /** Оригинал + (если получилось) превью, сохранённые в хранилище. */
     private record StoredImage(String url, String thumbUrl) {}
 
-    /** Загружает картинку по URL и кладёт в хранилище (оригинал + превью). */
+    /** Загружает картинку по URL и кладёт в хранилище (оригинал + превью), без вырезания фона. */
     private StoredImage fetchAndStore(String prefix, String url) throws Exception {
+        return fetchAndStore(prefix, url, false);
+    }
+
+    /**
+     * Загружает картинку по URL и кладёт в хранилище (оригинал + превью).
+     *
+     * @param cutBackground true — попытаться сделать белый фон прозрачным (для пэкшотов из
+     *                      каталогов; к пользовательским фото не применяется)
+     */
+    private StoredImage fetchAndStore(String prefix, String url, boolean cutBackground) throws Exception {
         Connection.Response resp = Jsoup.connect(url)
             .ignoreContentType(true)
             // максимально «браузерный» UA — некоторые CDN режут запросы по нестандартному агенту
@@ -475,9 +538,24 @@ public class DrinkService {
             throw new IllegalArgumentException("Ссылка не ведёт на изображение");
         }
 
+        if (cutBackground) {
+            // фон вырезаем ДО формирования ключа: результат всегда PNG, расширение должно совпасть
+            Optional<byte[]> cut = removeBackgroundIfEnabled(data);
+            if (cut.isPresent()) {
+                data = cut.get();
+                contentType = "image/png";
+                log.info("Обложка {}: белый фон вырезан", url);
+            }
+        }
+
         String key = prefix + "/" + System.currentTimeMillis() + "-"
             + Integer.toHexString(url.hashCode()) + "." + imageExt(contentType);
         return storeImage(key, data, contentType);
+    }
+
+    /** Вырезание белого фона, если оно включено в конфиге (media.remove-white-background). */
+    private Optional<byte[]> removeBackgroundIfEnabled(byte[] data) {
+        return removeWhiteBackground ? imageService.removeWhiteBackground(data) : Optional.empty();
     }
 
     /** Сохраняет оригинал по ключу и рядом — превью (если формат поддержан). */
