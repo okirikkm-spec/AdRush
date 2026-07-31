@@ -11,8 +11,10 @@ public class UserResponseDto {
     private String role;
     private String avatarUrl;
     private String bannerUrl;
-    private String bannerFit;
-    private String bannerPos;
+    private Double bannerScale;
+    private Integer bannerRotate;
+    private Double bannerOffsetX;
+    private Double bannerOffsetY;
     private boolean profilePrivate;
     private boolean totpEnabled;
     // Почта намеренно не входит в DTO: этот же объект отдаётся в публичном профиле
@@ -26,8 +28,10 @@ public class UserResponseDto {
         dto.setRole(user.getRole().name());
         dto.setAvatarUrl(user.getAvatarPath());
         dto.setBannerUrl(user.getBannerPath());
-        dto.setBannerFit(user.getBannerFit());
-        dto.setBannerPos(user.getBannerPos());
+        dto.setBannerScale(user.getBannerScale());
+        dto.setBannerRotate(user.getBannerRotate());
+        dto.setBannerOffsetX(user.getBannerOffsetX());
+        dto.setBannerOffsetY(user.getBannerOffsetY());
         dto.setProfilePrivate(user.isProfilePrivate());
         dto.setTotpEnabled(user.isTotpEnabled());
         return dto;

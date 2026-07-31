@@ -153,12 +153,14 @@ export async function uploadAvatar(file) {
   return res.json();
 }
 
-/** Обложка (фон) мини-профиля. fit/pos — кадрирование, сохраняется вместе с картинкой. */
-export async function uploadBanner(file, { fit, pos } = {}) {
+/** Обложка мини-профиля. Кадрирование (масштаб/поворот/сдвиг) сохраняется вместе с картинкой. */
+export async function uploadBanner(file, { scale, rotate, offsetX, offsetY } = {}) {
   const formData = new FormData();
   formData.append("file", file);
-  if (fit) formData.append("fit", fit);
-  if (pos) formData.append("pos", pos);
+  if (scale != null) formData.append("scale", scale);
+  if (rotate != null) formData.append("rotate", rotate);
+  if (offsetX != null) formData.append("offsetX", offsetX);
+  if (offsetY != null) formData.append("offsetY", offsetY);
   const res = await fetch(`${API_BASE}/api/auth/me/banner`, {
     method: "POST",
     headers: authHeaders(),
@@ -168,9 +170,9 @@ export async function uploadBanner(file, { fit, pos } = {}) {
   return res.json();
 }
 /** Изменить кадрирование, не перезагружая картинку. */
-export function updateBannerFraming({ fit, pos }) {
+export function updateBannerFraming({ scale, rotate, offsetX, offsetY }) {
   return jsonRequest("/api/auth/me/banner/framing", {
-    method: "PUT", body: { fit, pos }, auth: true,
+    method: "PUT", body: { scale, rotate, offsetX, offsetY }, auth: true,
   });
 }
 export function removeBanner() {

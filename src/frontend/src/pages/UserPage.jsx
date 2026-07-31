@@ -9,7 +9,7 @@ import {
   fetchUserProfile, fetchMe, isAuthenticated,
   deleteReviewAsAdmin, warnUser, mediaUrl,
 } from "../services/api";
-import { coverStyle } from "../utils/coverStyle";
+import BannerLayer, { framingOf } from "../components/BannerLayer";
 
 export default function UserPage() {
   const { id } = useParams();
@@ -65,13 +65,7 @@ export default function UserPage() {
           <>
             {/* Мини-профиль с обложкой — та же вёрстка, что на своей странице профиля */}
             <div className={`card profile-hero ${data.user.bannerUrl ? "has-banner" : ""}`}>
-              {data.user.bannerUrl && (
-                <img className="profile-hero-bg" src={mediaUrl(data.user.bannerUrl)} alt=""
-                  draggable={false}
-                  style={coverStyle(
-                    data.user.bannerFit === "contain" ? "contain" : "cover",
-                    data.user.bannerPos || "50% 50%")} />
-              )}
+              <BannerLayer url={mediaUrl(data.user.bannerUrl)} {...framingOf(data.user)} />
 
               <div className="profile-head" style={{ marginBottom: 0 }}>
                 <Avatar url={data.user.avatarUrl} name={data.user.displayName} size={72} />

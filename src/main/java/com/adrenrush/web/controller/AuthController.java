@@ -86,20 +86,33 @@ public class AuthController {
         return ResponseEntity.ok(userService.updateAvatar(currentUser, file));
     }
 
-    /** Обложка мини-профиля. fit/pos — кадрирование, можно передать сразу с картинкой. */
+    /** Обложка мини-профиля. Масштаб/поворот/смещение можно передать сразу с картинкой. */
     @PostMapping("/me/banner")
-    public ResponseEntity<UserResponseDto> uploadBanner(@AuthenticationPrincipal User currentUser,
-                                                        @RequestParam("file") MultipartFile file,
-                                                        @RequestParam(value = "fit", required = false) String fit,
-                                                        @RequestParam(value = "pos", required = false) String pos) {
-        return ResponseEntity.ok(userService.updateBanner(currentUser, file, fit, pos));
+    public ResponseEntity<UserResponseDto> uploadBanner(
+            @AuthenticationPrincipal User currentUser,
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "scale", required = false) Double scale,
+            @RequestParam(value = "rotate", required = false) Integer rotate,
+            @RequestParam(value = "offsetX", required = false) Double offsetX,
+            @RequestParam(value = "offsetY", required = false) Double offsetY) {
+        return ResponseEntity.ok(userService.updateBanner(currentUser, file, scale, rotate, offsetX, offsetY));
     }
 
     /** Кадрирование уже загруженной обложки. */
     @PutMapping("/me/banner/framing")
     public ResponseEntity<UserResponseDto> updateBannerFraming(@AuthenticationPrincipal User currentUser,
-                                                               @RequestBody Map<String, String> body) {
-        return ResponseEntity.ok(userService.updateBannerFraming(currentUser, body.get("fit"), body.get("pos")));
+                                                               @RequestBody Map<String, Object> body) {
+        return ResponseEntity.ok(userService.updateBannerFraming(currentUser,
+            toDouble(body.get("scale")), toInt(body.get("rotate")),
+            toDouble(body.get("offsetX")), toDouble(body.get("offsetY"))));
+    }
+
+    private Double toDouble(Object value) {
+        return value instanceof Number n ? n.doubleValue() : null;
+    }
+
+    private Integer toInt(Object value) {
+        return value instanceof Number n ? n.intValue() : null;
     }
 
     @DeleteMapping("/me/banner")

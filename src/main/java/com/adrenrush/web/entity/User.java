@@ -43,10 +43,13 @@ public class User {
 
     /* Кадрирование обложки — как у обложек напитков: оригинал не режем,
        храним режим вписывания и точку фокуса. null = значения по умолчанию. */
-    /** "cover" (заполнить) или "contain" (целиком). */
-    private String bannerFit;
-    /** background-position, например "50% 30%". */
-    private String bannerPos;
+    /** Масштаб: 1 = картинка вписана по короткой стороне (заполняет плашку). */
+    private Double bannerScale;
+    /** Поворот в градусах. */
+    private Integer bannerRotate;
+    /** Смещение в процентах от размера плашки. */
+    private Double bannerOffsetX;
+    private Double bannerOffsetY;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

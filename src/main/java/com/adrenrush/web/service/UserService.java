@@ -21,9 +21,10 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class UserService {
 
-    /** Точка фокуса обложки: "NN% NN%". */
-    private static final java.util.regex.Pattern BANNER_POS =
-        java.util.regex.Pattern.compile("^\\d{1,3}% \\d{1,3}%$");
+    /* Пределы кадрирования обложки. Значения приходят с клиента и уходят
+       обратно в inline-стиль, поэтому загоняем их в разумные рамки. */
+    private static final double SCALE_MIN = 0.2, SCALE_MAX = 5.0;
+    private static final double OFFSET_LIMIT = 200.0;   // проценты от размера плашки
 
     private final UserRepository userRepository;
     private final ReviewService reviewService;
@@ -58,12 +59,13 @@ public class UserService {
 
     /** Обложка мини-профиля. Кадрирование можно задать тем же запросом. */
     @Transactional
-    public UserResponseDto updateBanner(User user, MultipartFile file, String fit, String pos) {
+    public UserResponseDto updateBanner(User user, MultipartFile file,
+                                        Double scale, Integer rotate, Double offsetX, Double offsetY) {
         String previous = user.getBannerPath();
         // Папка намеренно называется covers, а не banners: блокировщики рекламы
         // режут запросы к путям со словом "banner" — обложка не грузится у пользователя.
         user.setBannerPath(storeImage(user, file, "covers", "Не удалось сохранить обложку"));
-        applyFraming(user, fit, pos);
+        applyFraming(user, scale, rotate, offsetX, offsetY);
         userRepository.save(user);
         discard(previous);
         return UserResponseDto.from(user);
@@ -71,11 +73,12 @@ public class UserService {
 
     /** Изменить кадрирование, не трогая саму картинку. */
     @Transactional
-    public UserResponseDto updateBannerFraming(User user, String fit, String pos) {
+    public UserResponseDto updateBannerFraming(User user,
+                                               Double scale, Integer rotate, Double offsetX, Double offsetY) {
         if (user.getBannerPath() == null) {
             throw ApiException.badRequest("Обложка не загружена");
         }
-        applyFraming(user, fit, pos);
+        applyFraming(user, scale, rotate, offsetX, offsetY);
         userRepository.save(user);
         return UserResponseDto.from(user);
     }
@@ -84,20 +87,28 @@ public class UserService {
     public UserResponseDto removeBanner(User user) {
         String previous = user.getBannerPath();
         user.setBannerPath(null);
-        user.setBannerFit(null);
-        user.setBannerPos(null);
+        user.setBannerScale(null);
+        user.setBannerRotate(null);
+        user.setBannerOffsetX(null);
+        user.setBannerOffsetY(null);
         userRepository.save(user);
         discard(previous);
         return UserResponseDto.from(user);
     }
 
-    /**
-     * Значения уходят во фронтовый inline-стиль, поэтому принимаем только
-     * заведомо безопасные: режим из белого списка и позицию строго "NN% NN%".
-     */
-    private void applyFraming(User user, String fit, String pos) {
-        user.setBannerFit("cover".equals(fit) ? "cover" : "contain");
-        user.setBannerPos(pos != null && BANNER_POS.matcher(pos).matches() ? pos : "50% 50%");
+    /** Приводит кадрирование к допустимым значениям; null трактуется как «по умолчанию». */
+    private void applyFraming(User user, Double scale, Integer rotate, Double offsetX, Double offsetY) {
+        user.setBannerScale(clamp(scale == null ? 1.0 : scale, SCALE_MIN, SCALE_MAX));
+        // Поворот сводим к 0..359, чтобы не копить обороты при многократной правке
+        int deg = rotate == null ? 0 : rotate % 360;
+        user.setBannerRotate(deg < 0 ? deg + 360 : deg);
+        user.setBannerOffsetX(clamp(offsetX == null ? 0.0 : offsetX, -OFFSET_LIMIT, OFFSET_LIMIT));
+        user.setBannerOffsetY(clamp(offsetY == null ? 0.0 : offsetY, -OFFSET_LIMIT, OFFSET_LIMIT));
+    }
+
+    private double clamp(double value, double min, double max) {
+        if (Double.isNaN(value) || Double.isInfinite(value)) return min == SCALE_MIN ? 1.0 : 0.0;
+        return Math.max(min, Math.min(max, value));
     }
 
     /**

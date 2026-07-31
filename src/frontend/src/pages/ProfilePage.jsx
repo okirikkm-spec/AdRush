@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Avatar from "../components/Avatar";
@@ -6,7 +6,7 @@ import TierList from "../components/TierList";
 import RatingStars from "../components/RatingStars";
 import OtpInput from "../components/OtpInput";
 import BannerFramerModal from "../components/BannerFramerModal";
-import { coverStyle } from "../utils/coverStyle";
+import BannerLayer, { framingOf } from "../components/BannerLayer";
 import {
   UserIcon, SettingsIcon, TrophyIcon, MailIcon, ShieldIcon,
   CopyIcon, CheckIcon, EditIcon, ImageIcon, CloseIcon,
@@ -114,23 +114,43 @@ function ProfileHero({ me, onChanged }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
   const avatarRef = useRef(null);
-  const bannerRef = useRef(null);
-  /* Открытая модалка предпросмотра: { file, url } — file пуст, если правим уже загруженную */
-  const [framer, setFramer] = useState(null);
+  const heroRef = useRef(null);
+  const [framerOpen, setFramerOpen] = useState(false);
+  /* Пропорции карточки — по ним строятся предпросмотр и рамка кадра. Считаем по
+     области, где реально лежит обложка (без рамки карточки), и держим значение
+     актуальным: высота меняется, например, при входе в режим правки. */
+  const [heroAspect, setHeroAspect] = useState(7);
+
+  useLayoutEffect(() => {
+    const el = heroRef.current;
+    if (!el) return undefined;
+    const update = () => {
+      const cs = getComputedStyle(el);
+      const bw = parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth);
+      const bh = parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
+      const r = el.getBoundingClientRect();
+      const w = r.width - bw, h = r.height - bh;
+      if (w > 0 && h > 0) setHeroAspect(w / h);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   /* Правки обложки копятся локально и уходят на сервер только по «Готово» —
      иначе «Отмена» не смогла бы их откатить: старый файл при замене удаляется. */
   const [draft, setDraft] = useState(null);   // { file, previewUrl } — новая картинка
   const [dropped, setDropped] = useState(false);
-  const [fit, setFit] = useState(me.bannerFit === "contain" ? "contain" : "cover");
-  const [pos, setPos] = useState(me.bannerPos || "50% 50%");
+  const [framing, setFraming] = useState(framingOf(me));
 
   // Превью живёт в памяти браузера — освобождаем, чтобы не течь
   useEffect(() => () => { if (draft) URL.revokeObjectURL(draft.previewUrl); }, [draft]);
 
   const bannerUrl = dropped ? null : (draft ? draft.previewUrl : mediaUrl(me.bannerUrl));
-  const framingChanged = fit !== (me.bannerFit === "contain" ? "contain" : "cover")
-    || pos !== (me.bannerPos || "50% 50%");
+  const saved = framingOf(me);
+  const framingChanged = framing.scale !== saved.scale || framing.rotate !== saved.rotate
+    || framing.offsetX !== saved.offsetX || framing.offsetY !== saved.offsetY;
 
   const run = async (action) => {
     setBusy(true); setMsg(null);
@@ -151,32 +171,26 @@ function ProfileHero({ me, onChanged }) {
     if (file) run(() => uploadAvatar(file));   // аватарка применяется сразу
   };
 
-  /* ── Выбор картинки: сразу открываем предпросмотр с настройкой кадра ── */
+  /* ── Окно обложки: выбор файла, предпросмотр и настройка кадра ── */
 
-  const pickBanner = (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (file) setFramer({ file, url: URL.createObjectURL(file) });
-  };
-
-  /** Перекадрировать уже выбранную/загруженную обложку, не меняя файл. */
-  const reframe = () => setFramer({ file: null, url: bannerUrl });
-
-  const closeFramer = () => {
-    // Превью новой картинки больше не нужно — черновик остаётся прежним
-    if (framer?.file) URL.revokeObjectURL(framer.url);
-    setFramer(null);
-  };
-
-  const applyFramer = ({ fit: nextFit, pos: nextPos }) => {
-    if (framer.file) {
+  /** Файл выбран (кнопкой или перетаскиванием) — кладём в черновик, окно не закрываем. */
+  const applyFramer = ({ file, keepOpen, ...next }) => {
+    if (file) {
       if (draft) URL.revokeObjectURL(draft.previewUrl);
-      setDraft({ file: framer.file, previewUrl: framer.url });
+      setDraft({ file, previewUrl: URL.createObjectURL(file) });
       setDropped(false);
     }
-    setFit(nextFit);
-    setPos(nextPos);
-    setFramer(null);
+    setFraming(next);
+    if (!keepOpen) setFramerOpen(false);
+  };
+
+  /** Удаление обложки — тоже отложенное, до «Готово». */
+  const dropBanner = () => {
+    if (draft) URL.revokeObjectURL(draft.previewUrl);
+    setDraft(null);
+    setDropped(true);
+    setFraming({ scale: 1, rotate: 0, offsetX: 0, offsetY: 0 });
+    setFramerOpen(false);
   };
 
   /** «Готово» — применяем накопленные правки одним заходом. */
@@ -192,9 +206,9 @@ function ProfileHero({ me, onChanged }) {
     } else if (draft) {
       // Blob-ссылку не отзываем здесь: пока React не перерисует карточку с новым
       // адресом, она ещё используется как фон. Освободит её эффект по смене draft.
-      if (!await run(() => uploadBanner(draft.file, { fit, pos }))) return;
+      if (!await run(() => uploadBanner(draft.file, framing))) return;
     } else if (framingChanged && me.bannerUrl) {
-      if (!await run(() => updateBannerFraming({ fit, pos }))) return;
+      if (!await run(() => updateBannerFraming(framing))) return;
     }
 
     setDraft(null); setDropped(false); setEditing(false); setMsg(null);
@@ -206,34 +220,21 @@ function ProfileHero({ me, onChanged }) {
     setDraft(null);
     setDropped(false);
     setName(me.displayName || "");
-    setFit(me.bannerFit === "contain" ? "contain" : "cover");
-    setPos(me.bannerPos || "50% 50%");
+    setFraming(framingOf(me));
     setEditing(false);
     setMsg(null);
   };
 
   return (
     <>
-    <div className={`card profile-hero ${bannerUrl ? "has-banner" : ""}`}>
-      {bannerUrl && (
-        <img className="profile-hero-bg" src={bannerUrl} alt="" draggable={false}
-          style={coverStyle(fit, pos)} />
-      )}
+    <div ref={heroRef} className={`card profile-hero ${bannerUrl ? "has-banner" : ""}`}>
+      <BannerLayer url={bannerUrl} {...framing} />
 
       <div className="profile-hero-actions">
         {editing ? (
           <>
-            <button className="btn btn-secondary btn-sm" onClick={() => bannerRef.current?.click()}
-              disabled={busy} title="Загрузить обложку"><ImageIcon /> Обложка</button>
-            {bannerUrl && (
-              <button className="btn btn-secondary btn-sm" onClick={reframe} disabled={busy}
-                title="Настроить кадр">Кадр</button>
-            )}
-            {bannerUrl && (
-              <button className="btn btn-secondary btn-sm"
-                onClick={() => { if (draft) URL.revokeObjectURL(draft.previewUrl); setDraft(null); setDropped(true); }}
-                disabled={busy} title="Убрать обложку">Убрать</button>
-            )}
+            <button className="btn btn-secondary btn-sm" onClick={() => setFramerOpen(true)}
+              disabled={busy} title="Обложка профиля"><ImageIcon /> Обложка</button>
             <button className="btn btn-secondary btn-sm" onClick={cancel} disabled={busy}
               title="Отменить изменения" aria-label="Отменить изменения"><CloseIcon /></button>
             {/* Занимает место карандаша — выход из режима правки */}
@@ -246,7 +247,6 @@ function ProfileHero({ me, onChanged }) {
         )}
       </div>
 
-      <input ref={bannerRef} type="file" accept="image/*" hidden onChange={pickBanner} />
       <input ref={avatarRef} type="file" accept="image/*" hidden onChange={pickAvatar} />
 
       <div className="profile-head" style={{ marginBottom: 0 }}>
@@ -275,9 +275,9 @@ function ProfileHero({ me, onChanged }) {
     </div>
 
     {/* Вне карточки: у неё overflow: hidden, внутри модалка не всплывёт */}
-    {framer && (
-      <BannerFramerModal url={framer.url} fit={fit} pos={pos}
-        onApply={applyFramer} onClose={closeFramer} />
+    {framerOpen && (
+      <BannerFramerModal me={me} url={bannerUrl} framing={framing} aspect={heroAspect}
+        onApply={applyFramer} onRemove={dropBanner} onClose={() => setFramerOpen(false)} />
     )}
     </>
   );

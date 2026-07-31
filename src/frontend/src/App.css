@@ -803,9 +803,15 @@ a.mini-review-name:hover { color: var(--accent); }
 /* Обложка — обычный <img> под содержимым, как аватарка и превью в модалке:
    одна и та же техника object-fit/object-position, поэтому предпросмотр
    совпадает с результатом. CSS-фон для этого не годился. */
-.profile-hero-bg {
-  position: absolute; inset: 0; width: 100%; height: 100%;
-  z-index: 0; pointer-events: none; user-select: none;
+/* Слой обложки: обёртка = размер плашки (её translate считается от плашки),
+   картинка внутри отцентрована и покрывает плашку при масштабе 1. */
+.banner-layer { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+/* Размеры проставляются инлайном из BannerLayer — здесь только снимаем
+   ограничения, которые иначе ужмут картинку. */
+.banner-img {
+  position: absolute; left: 50%; top: 50%;
+  max-width: none; max-height: none;
+  user-select: none; transform-origin: center;
 }
 .profile-hero .profile-head,
 .profile-hero .row,
@@ -1065,8 +1071,65 @@ a.mini-review-name:hover { color: var(--accent); }
 .framer-frame.draggable:active { cursor: grabbing; }
 .framer-card { aspect-ratio: 1 / 1; }
 .framer-modal { aspect-ratio: 16 / 10; }
-/* Пропорции мини-профиля: широкая и низкая плашка */
-.framer-banner { aspect-ratio: 7 / 1; touch-action: none; }
+/* ── Окно обложки профиля ── */
+.modal-banner { max-width: 720px; }
+
+/* Зона перетаскивания, когда обложки ещё нет */
+.dropzone {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  padding: 44px 20px; cursor: pointer; text-align: center;
+  border: 2px dashed var(--border); border-radius: var(--radius-lg);
+  background: var(--surface-2); color: var(--text-muted);
+  transition: border-color .15s, background .15s, color .15s;
+}
+.dropzone:hover, .dropzone.over { border-color: var(--accent); color: var(--text); }
+.dropzone.over { background: var(--accent-dim); }
+.dropzone-title { font-size: 15px; font-weight: 700; }
+.dropzone-sub { font-size: 12px; }
+
+.banner-block { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.banner-block:last-child { margin-bottom: 0; }
+
+/* Блок 1: уменьшенная копия карточки. Пропорции задаются инлайном по замеру
+   реальной карточки — иначе кадр в предпросмотре не совпадёт с результатом. */
+/* Рамка задана через outline: border исказил бы соотношение сторон,
+   а вместе с ним и кадр относительно настоящей карточки. */
+.banner-preview {
+  position: relative; overflow: hidden;
+  background: var(--surface-2); border-radius: var(--radius-lg);
+  outline: 1px solid var(--border); outline-offset: -1px;
+}
+.banner-preview-body {
+  position: absolute; inset: 0; z-index: 1;
+  display: flex; align-items: center; gap: 14px; padding: 0 14px;
+}
+.banner-preview-name { font-size: 17px; font-weight: 800; color: #fff; text-shadow: 0 1px 4px rgba(0, 0, 0, .75); }
+.banner-preview-sub { font-size: 12px; color: rgba(255, 255, 255, .9); text-shadow: 0 1px 4px rgba(0, 0, 0, .75); }
+
+/* Блок 2: видно почти всё изображение, рамка показывает видимую в карточке часть */
+.cropper-stage {
+  position: relative; overflow: hidden; height: 168px; touch-action: none; cursor: grab;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-lg);
+}
+.cropper-stage:active { cursor: grabbing; }
+/* Рамка без overflow: за её пределами картинка остаётся видимой.
+   aspect-ratio приходит инлайном — ровно как у настоящей карточки. */
+.cropper-frame {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 78%;
+}
+/* Затемнение всего, что не попадёт в карточку */
+.cropper-shade {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 78%; pointer-events: none;
+  outline: 2px solid rgba(255, 255, 255, .9); border-radius: 2px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, .6);
+}
+.cropper-controls { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.cropper-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.cropper-label { font-size: 13px; font-weight: 600; min-width: 72px; }
+.cropper-row input[type="range"] { flex: 1; min-width: 140px; accent-color: var(--accent); }
+.cropper-value { font-size: 12px; color: var(--text-muted); min-width: 46px; text-align: right; }
 .framer-empty {
   display: flex; align-items: center; justify-content: center; height: 100%;
   color: var(--text-faint); font-size: 28px;
