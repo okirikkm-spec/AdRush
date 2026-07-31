@@ -8,14 +8,19 @@ import org.jsoup.select.Elements;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.HashSet;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -31,9 +36,21 @@ import java.util.concurrent.TimeUnit;
  * Next.js имеют хэш-суффикс (product-rail_card__5pUT7), который меняется при каждой сборке сайта,
  * поэтому селекторы завязаны на стабильный префикс через {@code [class*=...]}.
  *
- * Описание в карточке рейла отсутствует, поэтому по каждому товару дополнительно открывается его
- * страница (тем же curl) и берётся {@code og:description} / {@code meta[name=description]} — они
- * есть у всех вкусов и различаются по продуктам (см. {@link #fetchDescription}).
+ * Одного каталога мало: он показывает только текущий ассортимент. Сезонные издания вроде
+ * Summer Edition на сайте есть, но ссылок на них нет НИГДЕ — ни в каталоге, ни на хабе
+ * «Red Bull Editions», ни в sitemap (проверено 31.07.2026: sitemap сайта вообще не содержит
+ * страниц раздела energydrink). Поэтому ассортимент собирается из трёх источников:
+ * <ul>
+ *   <li>карточки каталога — актуальный ассортимент с чистыми названиями;</li>
+ *   <li>ссылки на издания со страницы-хаба {@code /energydrink/red-bull-editions};</li>
+ *   <li>адреса из {@code redbull.parser.extra-urls} — страницы, добавленные вручную, потому что
+ *       найти их обходом невозможно.</li>
+ * </ul>
+ * Угадывать такие адреса по шаблону нельзя: сайт отвечает 200 и на несуществующие
+ * (например, {@code red-bull-white-edition}), отдавая содержимое каталога.
+ * Название, описание и пэкшот берутся со страницы самого товара из метатегов Open Graph
+ * (см. {@link #fetchProductPage}); для позиций из каталога название предпочитается «рейловое» —
+ * оно короче и чище заголовка страницы.
  *
  * Важно: страница за Akamai Bot Manager, который блокирует Java-клиента по TLS-фингерпринту (JA3) и
  * отдаёт ему 403 даже с браузерными заголовками. Поэтому HTML качаем системным curl (его TLS Akamai
@@ -43,7 +60,7 @@ import java.util.concurrent.TimeUnit;
  */
 @Service
 @RequiredArgsConstructor
-public class RedBullParserService {
+public class RedBullParserService implements CatalogParser {
 
     private static final Logger log = LoggerFactory.getLogger(RedBullParserService.class);
     private static final String USER_AGENT =
@@ -52,7 +69,12 @@ public class RedBullParserService {
     /** Бренд, который проставляется всем карточкам из этого каталога. */
     public static final String BRAND = "Red Bull";
 
-    private final DrinkService drinkService;
+    /** Ссылка на издание: «…/energydrink/red-bull-<что-то>-edition». */
+    private static final Pattern EDITION_SLUG = Pattern.compile("/red-bull-[a-z0-9\\-]+-edition(?:/|$)");
+    /** Хвост заголовка после названия продукта: «… со вкусом белого персика», «… — RedBull.com». */
+    private static final Pattern TITLE_TAIL = Pattern.compile(
+        "\\s*(?:со\\s+вкусом|с\\s+вкусом|\\||—|-\\s*RedBull\\.com|\\.)\\s*.*$",
+        Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE | Pattern.UNICODE_CHARACTER_CLASS);
 
     @Value("${redbull.parser.url}")
     private String catalogUrl;
@@ -60,93 +82,146 @@ public class RedBullParserService {
     @Value("${redbull.parser.enabled:true}")
     private boolean enabled;
 
-    /** Ежедневный запуск по cron из application.properties (по умолчанию в 04:30, со сдвигом от adrenaline). */
-    @Scheduled(cron = "${redbull.parser.cron:0 30 4 * * *}")
-    public void scheduledParse() {
-        if (!enabled) return;
-        log.info("Запланированный парсинг ассортимента redbull.com");
-        parse(false);
+    /**
+     * Дополнительные страницы товаров через запятую — те, на которые сайт ниоткуда не ссылается
+     * (ни каталог, ни хаб изданий, ни sitemap), поэтому найти их обходом нельзя. Такие адреса
+     * добавляются сюда вручную; сейчас это Summer Edition.
+     */
+    @Value("${redbull.parser.extra-urls:https://www.redbull.com/ru-ru/energydrink/red-bull-summer-edition}")
+    private String extraUrls;
+
+    @Override
+    public String source() {
+        return BRAND;
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return enabled;
     }
 
     /**
-     * Обходит карточки товаров на странице каталога. Дедупликация — по ссылке на страницу товара
-     * (href): у Red Bull, в отличие от adrenalinerush.ru, есть стабильные per-product URL.
-     *
-     * @param reparse false — заводятся только новые карточки; true — у существующих обновляются
-     *                название/бренд из источника
-     * @return сводка: создано/обновлено
+     * Собирает ассортимент из трёх источников (см. описание класса): карточки каталога, ссылки со
+     * страницы-хаба «Red Bull Editions» и проверка сезонных изданий по списку из конфига. Ключ
+     * позиции — ссылка на страницу товара: у Red Bull есть стабильные per-product URL.
      */
-    public DrinkService.ParseResult parse(boolean reparse) {
+    @Override
+    public List<ParsedItem> collect() {
         try {
-            String html = fetchViaCurl(catalogUrl);
-            Document doc = Jsoup.parse(html, catalogUrl);
+            Map<String, String> namesByUrl = new LinkedHashMap<>();
+            Map<String, String> imagesByUrl = new HashMap<>();
 
-            Elements cards = doc.select("a[class*=product-rail_card][href]");
+            String catalogHtml = fetchViaCurl(catalogUrl);
+            Document catalog = Jsoup.parse(catalogHtml, catalogUrl);
+            Elements cards = catalog.select("a[class*=product-rail_card][href]");
             if (cards.isEmpty()) {
                 log.warn("Red Bull-парсер: не найдено ни одной карточки (a.product-rail_card). "
                     + "Структура сайта могла измениться, либо Akamai вернул страницу-заглушку вместо каталога.");
-                return new DrinkService.ParseResult(0, 0);
             }
-
-            int created = 0;
-            int updated = 0;
-            Set<String> seen = new HashSet<>();
-
             for (Element card : cards) {
                 String href = card.absUrl("href");
-                if (!isProductHref(href) || !seen.add(href)) continue;
-
-                String name = productName(card);
-                String imageUrl = bestImage(card);
-                if (name.isBlank() || imageUrl == null) continue;
-
-                // описание берём со страницы самого товара — в карточке рейла его нет
-                String description = fetchDescription(href);
-
-                // sourceUrl = href: стабильный уникальный ключ дедупликации;
-                // downloadCover=true — качаем пэкшот с Contentful CDN в наше хранилище (как adrenaline).
-                DrinkService.ParseOutcome outcome =
-                    drinkService.upsertFromParser(name, description, BRAND, imageUrl, href, true, reparse);
-                if (outcome == DrinkService.ParseOutcome.CREATED) {
-                    created++;
-                    log.info("Red Bull-парсер: добавлен энергетик '{}' ({})", name, href);
-                } else if (outcome == DrinkService.ParseOutcome.UPDATED) {
-                    updated++;
-                }
+                if (!isProductHref(href)) continue;
+                // имя из карточки рейла чище, чем из og:title страницы («Red Bull Energy Drink»
+                // против «Энергетический напиток Red Bull. Бодрит тело и дух.»)
+                namesByUrl.putIfAbsent(href, productName(card));
+                String img = bestImage(card);
+                if (img != null) imagesByUrl.putIfAbsent(href, img);
             }
 
-            if (created == 0 && updated == 0) {
-                log.info("Red Bull-парсер: изменений не найдено");
-            } else {
-                log.info("Red Bull-парсер: создано {}, обновлено {}", created, updated);
+            for (String href : collectLinkedEditions()) namesByUrl.putIfAbsent(href, "");
+            for (String href : extraProductUrls()) namesByUrl.putIfAbsent(href, "");
+
+            List<ParsedItem> items = new ArrayList<>();
+            for (Map.Entry<String, String> entry : namesByUrl.entrySet()) {
+                String href = entry.getKey();
+                ProductPage page = fetchProductPage(href);
+                if (page == null) continue;
+
+                String name = !entry.getValue().isBlank() ? entry.getValue() : page.name();
+                String imageUrl = imagesByUrl.getOrDefault(href, page.imageUrl());
+                if (name.isBlank() || imageUrl == null || imageUrl.isBlank()) continue;
+
+                items.add(new ParsedItem(name, page.description(), BRAND, imageUrl, href, BRAND));
             }
-            return new DrinkService.ParseResult(created, updated);
+
+            log.info("Red Bull-парсер: найдено позиций {} (карточек в каталоге: {})", items.size(), cards.size());
+            return items;
         } catch (Exception e) {
             log.warn("Red Bull-парсер: ошибка обхода {}: {}", catalogUrl, e.getMessage());
-            return new DrinkService.ParseResult(0, 0);
+            return List.of();
         }
     }
 
+    /** Разобранная страница товара: имя, описание и пэкшот из метатегов. */
+    private record ProductPage(String name, String description, String imageUrl) {}
+
     /**
-     * Описание товара со страницы самого продукта (в карточке рейла его нет): открывает её тем же
-     * curl и читает {@code og:description}, иначе {@code meta[name=description]}. Эти метатеги есть у
-     * всех вкусов и различаются по продуктам. Любая ошибка/отсутствие — не фейлит карточку (вернёт null).
+     * Ссылки на издания со страницы-хаба «Red Bull Editions». Отдельный источник, потому что в
+     * каталоге показывается только текущий ассортимент, а хаб переживает сезонные перестановки.
      */
-    private String fetchDescription(String productUrl) {
+    private Set<String> collectLinkedEditions() {
+        Set<String> found = new LinkedHashSet<>();
+        String hub = sectionUrl() + "/red-bull-editions";
         try {
-            Document pdoc = Jsoup.parse(fetchViaCurl(productUrl), productUrl);
-            Element meta = pdoc.selectFirst("meta[property=og:description]");
-            if (meta == null) meta = pdoc.selectFirst("meta[name=description]");
-            String desc = meta != null ? normalize(meta.attr("content")) : "";
-            return desc.isBlank() ? null : desc;
+            Document doc = Jsoup.parse(fetchViaCurl(hub), hub);
+            for (Element a : doc.select("a[href]")) {
+                String href = a.absUrl("href");
+                if (isProductHref(href) && EDITION_SLUG.matcher(href).find()) found.add(href);
+            }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            log.warn("Red Bull-парсер: получение описания прервано {}", productUrl);
+        } catch (Exception e) {
+            log.debug("Red Bull-парсер: хаб изданий недоступен ({})", e.getMessage());
+        }
+        return found;
+    }
+
+    /** Адреса из {@code redbull.parser.extra-urls} — страницы, до которых нет ссылок на сайте. */
+    private Set<String> extraProductUrls() {
+        Set<String> urls = new LinkedHashSet<>();
+        for (String url : extraUrls.split(",")) {
+            String trimmed = url.trim();
+            if (!trimmed.isEmpty()) urls.add(trimmed);
+        }
+        return urls;
+    }
+
+    /** Раздел энергетиков («https://www.redbull.com/ru-ru/energydrink») без хвостового слэша. */
+    private String sectionUrl() {
+        return catalogUrl.replaceAll("/+$", "");
+    }
+
+    /**
+     * Открывает страницу товара и достаёт имя, описание и пэкшот из метатегов Open Graph. Имя
+     * чистится от хвоста-описания («Red Bull Summer Edition со вкусом белого персика» →
+     * «Red Bull Summer Edition»), артикль «The» в начале убирается.
+     */
+    private ProductPage fetchProductPage(String productUrl) {
+        try {
+            Document doc = Jsoup.parse(fetchViaCurl(productUrl), productUrl);
+            String title = metaContent(doc, "meta[property=og:title]");
+            String name = TITLE_TAIL.matcher(title).replaceFirst("");
+            name = name.replaceFirst("(?i)^the\\s+", "").trim();
+
+            String description = metaContent(doc, "meta[property=og:description]");
+            if (description.isBlank()) description = metaContent(doc, "meta[name=description]");
+
+            String image = metaContent(doc, "meta[property=og:image]");
+            return new ProductPage(normalize(name), description.isBlank() ? null : normalize(description),
+                image.isBlank() ? null : image);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("Red Bull-парсер: разбор страницы прерван {}", productUrl);
             return null;
         } catch (Exception e) {
-            log.warn("Red Bull-парсер: не удалось получить описание {}: {}", productUrl, e.getMessage());
+            log.warn("Red Bull-парсер: не удалось разобрать {}: {}", productUrl, e.getMessage());
             return null;
         }
+    }
+
+    private String metaContent(Document doc, String selector) {
+        Element meta = doc.selectFirst(selector);
+        return meta != null ? normalize(meta.attr("content")) : "";
     }
 
     /**

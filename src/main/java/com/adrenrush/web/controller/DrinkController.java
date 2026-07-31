@@ -2,19 +2,20 @@ package com.adrenrush.web.controller;
 
 import com.adrenrush.web.dto.DrinkResponseDto;
 import com.adrenrush.web.entity.User;
+import com.adrenrush.web.enums.CandidateStatus;
 import com.adrenrush.web.enums.RoleEnum;
 import com.adrenrush.web.exception.ApiException;
 import com.adrenrush.web.service.DrinkService;
-import com.adrenrush.web.service.ParserService;
-import com.adrenrush.web.service.RedBullParserService;
-import com.adrenrush.web.service.WorldSweetParserService;
+import com.adrenrush.web.service.ParserStagingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -24,9 +25,7 @@ import java.util.Objects;
 public class DrinkController {
 
     private final DrinkService drinkService;
-    private final ParserService parserService;
-    private final RedBullParserService redBullParserService;
-    private final WorldSweetParserService worldSweetParserService;
+    private final ParserStagingService stagingService;
 
     /** Все энергетики в порядке убывания оценки (для главной). */
     @GetMapping
@@ -124,52 +123,84 @@ public class DrinkController {
         return ResponseEntity.ok(drinkService.optimizeMedia(currentUser));
     }
 
-    /**
-     * Список источников с автоматическим парсером каталога (сами тянут с сайта) — для окна
-     * парсинга в админке. Monster берётся не с официального сайта (он за Cloudflare), а из
-     * каталога магазина worldsweet.ru — отсюда метка «Monster (WorldSweet)».
-     */
+    /** Источники с парсером каталога — для окна парсинга в админке. */
     @GetMapping("/parse/sources")
     public ResponseEntity<List<String>> parseSources(@AuthenticationPrincipal User currentUser) {
         requireAdmin(currentUser);
-        return ResponseEntity.ok(List.of(
-            ParserService.BRAND, RedBullParserService.BRAND, WorldSweetParserService.SOURCE));
+        return ResponseEntity.ok(stagingService.availableSources());
     }
 
     /**
-     * Ручной запуск авто-парсеров для выбранных брендов — только для администратора.
-     * Тело: {@code {"brands": ["Adrenaline Rush"], "reparse": false}}.
-     * reparse=false — только новые карточки; reparse=true — обновить и существующие.
+     * Обход выбранных источников — только для администратора. Карточки НЕ создаются: найденное
+     * попадает в приёмку, откуда администратор принимает нужное (см. {@link #parseCandidates}).
+     * Тело: {@code {"brands": ["Adrenaline Rush"]}}.
      */
     @PostMapping("/parse")
-    public ResponseEntity<Map<String, Object>> parse(@AuthenticationPrincipal User currentUser,
-                                                     @RequestBody(required = false) Map<String, Object> body) {
+    public ResponseEntity<ParserStagingService.ScanResult> parse(@AuthenticationPrincipal User currentUser,
+                                                                @RequestBody(required = false) Map<String, Object> body) {
         requireAdmin(currentUser);
         Map<String, Object> payload = body != null ? body : Map.of();
         List<String> brands = asStringList(payload.get("brands"));
-        boolean reparse = Boolean.TRUE.equals(payload.get("reparse"));
         if (brands.isEmpty()) {
-            throw ApiException.badRequest("Выберите хотя бы один бренд для парсинга");
+            throw ApiException.badRequest("Выберите хотя бы один источник для парсинга");
         }
+        return ResponseEntity.ok(stagingService.scan(brands));
+    }
 
-        int created = 0;
-        int updated = 0;
-        if (brands.contains(ParserService.BRAND)) {
-            DrinkService.ParseResult r = parserService.parse(reparse);
-            created += r.created();
-            updated += r.updated();
+    /**
+     * Позиции приёмки: {@code status=PENDING} — ждут решения, {@code status=IGNORED} — вкладка
+     * «Игнор» (отклонённые ранее; при новых проходах галочка на них не ставится).
+     */
+    @GetMapping("/parse/candidates")
+    public ResponseEntity<Map<String, Object>> parseCandidates(@AuthenticationPrincipal User currentUser,
+                                                               @RequestParam(defaultValue = "PENDING") String status) {
+        requireAdmin(currentUser);
+        CandidateStatus parsed;
+        try {
+            parsed = CandidateStatus.valueOf(status.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw ApiException.badRequest("Неизвестный статус: " + status);
         }
-        if (brands.contains(RedBullParserService.BRAND)) {
-            DrinkService.ParseResult r = redBullParserService.parse(reparse);
-            created += r.created();
-            updated += r.updated();
+        return ResponseEntity.ok(Map.of(
+            "items", stagingService.list(parsed),
+            "counts", stagingService.counts()));
+    }
+
+    /**
+     * Применяет решение по приёмке — только для администратора.
+     * Тело: {@code {"accept": [{"id": 1, "name": "…", "description": "…"}], "ignore": [2, 3]}}.
+     * Отмеченные позиции становятся карточками каталога (с правками названия/описания и загрузкой
+     * обложки), перечисленные в {@code ignore} — уходят в игнор.
+     */
+    @PostMapping("/parse/candidates/apply")
+    public ResponseEntity<ParserStagingService.ApplyResult> applyCandidates(
+            @AuthenticationPrincipal User currentUser,
+            @RequestBody Map<String, Object> body) {
+        requireAdmin(currentUser);
+        List<ParserStagingService.ApplyItem> accept = asApplyItems(body.get("accept"));
+        List<Long> ignore = asIdList(body.get("ignore"));
+        if (accept.isEmpty() && ignore.isEmpty()) {
+            throw ApiException.badRequest("Нечего применять: не выбрано ни одной позиции");
         }
-        if (brands.contains(WorldSweetParserService.SOURCE)) {
-            DrinkService.ParseResult r = worldSweetParserService.parse(reparse);
-            created += r.created();
-            updated += r.updated();
-        }
-        return ResponseEntity.ok(Map.of("created", created, "updated", updated));
+        return ResponseEntity.ok(stagingService.apply(currentUser, accept, ignore));
+    }
+
+    /** Возвращает позицию из игнора в список ожидающих решения — только администратор. */
+    @PostMapping("/parse/candidates/{id}/unignore")
+    public ResponseEntity<Map<String, String>> unignoreCandidate(@AuthenticationPrincipal User currentUser,
+                                                                 @PathVariable Long id) {
+        requireAdmin(currentUser);
+        stagingService.unignore(id);
+        return ResponseEntity.ok(Map.of("status", "ok"));
+    }
+
+    /** Убирает позицию из приёмки совсем (товар исчез из магазина) — только администратор. */
+    @DeleteMapping("/parse/candidates/{id}")
+    public ResponseEntity<Map<String, String>> forgetCandidate(@AuthenticationPrincipal User currentUser,
+                                                               @PathVariable Long id) {
+        requireAdmin(currentUser);
+        stagingService.forget(id);
+        return ResponseEntity.ok(Map.of("status", "ok"));
     }
 
     private List<String> asStringList(Object raw) {
@@ -177,6 +208,38 @@ public class DrinkController {
             return list.stream().filter(Objects::nonNull).map(Object::toString).toList();
         }
         return List.of();
+    }
+
+    /** Разбирает {@code accept} из тела: элементы вида {@code {id, name, description}}. */
+    private List<ParserStagingService.ApplyItem> asApplyItems(Object raw) {
+        if (!(raw instanceof List<?> list)) return List.of();
+        List<ParserStagingService.ApplyItem> items = new ArrayList<>();
+        for (Object element : list) {
+            if (!(element instanceof Map<?, ?> map)) continue;
+            Long id = asLong(map.get("id"));
+            if (id == null) continue;
+            Object name = map.get("name");
+            Object description = map.get("description");
+            items.add(new ParserStagingService.ApplyItem(id,
+                name != null ? name.toString() : null,
+                description != null ? description.toString() : null));
+        }
+        return items;
+    }
+
+    private List<Long> asIdList(Object raw) {
+        if (!(raw instanceof List<?> list)) return List.of();
+        return list.stream().map(this::asLong).filter(Objects::nonNull).toList();
+    }
+
+    private Long asLong(Object raw) {
+        if (raw instanceof Number number) return number.longValue();
+        if (raw == null) return null;
+        try {
+            return Long.parseLong(raw.toString());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private void requireAdmin(User user) {

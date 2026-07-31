@@ -9,6 +9,7 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Optional;
@@ -48,21 +49,49 @@ public class ImageService {
     public Optional<byte[]> makeThumbnail(byte[] source, String outputFormat) {
         if (source == null || source.length == 0) return Optional.empty();
         try {
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            Thumbnails.of(new ByteArrayInputStream(source))
-                .size(THUMB_MAX_DIM, THUMB_MAX_DIM)
-                .keepAspectRatio(true)
-                .outputQuality(0.82)
-                .outputFormat(outputFormat)
-                .toOutputStream(out);
-            byte[] thumb = out.toByteArray();
+            byte[] thumb = "png".equalsIgnoreCase(outputFormat) ? pngThumbnail(source) : jpgThumbnail(source);
             // если превью не легче оригинала (мелкая картинка и т.п.) — смысла в нём нет
-            if (thumb.length == 0 || thumb.length >= source.length) return Optional.empty();
+            if (thumb == null || thumb.length == 0 || thumb.length >= source.length) return Optional.empty();
             return Optional.of(thumb);
         } catch (Exception e) {
             log.debug("Превью не сгенерировано (формат {}): {}", outputFormat, e.getMessage());
             return Optional.empty();
         }
+    }
+
+    /**
+     * Превью для PNG. Масштабируем в ARGB явно: иначе у палитровых PNG (альфа живёт в чанке tRNS)
+     * прозрачность теряется и фон становится чёрным. Цвета округляем до 6 бит — прозрачный PNG
+     * заметно тяжелее палитрового оригинала, и без этого превью не проходило бы проверку «легче
+     * оригинала» и не создавалось вовсе.
+     */
+    private byte[] pngThumbnail(byte[] source) throws IOException {
+        BufferedImage scaled = Thumbnails.of(new ByteArrayInputStream(source))
+            .size(THUMB_MAX_DIM, THUMB_MAX_DIM)
+            .keepAspectRatio(true)
+            .imageType(BufferedImage.TYPE_INT_ARGB)
+            .asBufferedImage();
+
+        int w = scaled.getWidth();
+        int h = scaled.getHeight();
+        int[] px = scaled.getRGB(0, 0, w, h, null, 0, w);
+        posterize(px);
+        BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        out.setRGB(0, 0, w, h, px, 0, w);
+
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        return ImageIO.write(out, "png", bytes) ? bytes.toByteArray() : null;
+    }
+
+    private byte[] jpgThumbnail(byte[] source) throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        Thumbnails.of(new ByteArrayInputStream(source))
+            .size(THUMB_MAX_DIM, THUMB_MAX_DIM)
+            .keepAspectRatio(true)
+            .outputQuality(0.82)
+            .outputFormat("jpg")
+            .toOutputStream(out);
+        return out.toByteArray();
     }
 
     /**
@@ -109,6 +138,29 @@ public class ImageService {
         } catch (Exception e) {
             log.debug("Фон не вырезан: {}", e.getMessage());
             return Optional.empty();
+        }
+    }
+
+    /**
+     * Есть ли в изображении полностью прозрачные пиксели. Нужно, чтобы находить превью, у которых
+     * прозрачность потерялась при уменьшении (в карточке такая картинка выглядит как банка на
+     * чёрном прямоугольнике, хотя оригинал прозрачный).
+     */
+    public boolean hasTransparentPixels(byte[] source) {
+        if (source == null || source.length == 0) return false;
+        try {
+            BufferedImage img = ImageIO.read(new ByteArrayInputStream(source));
+            if (img == null || !img.getColorModel().hasAlpha()) return false;
+            int w = img.getWidth();
+            int h = img.getHeight();
+            int[] px = img.getRGB(0, 0, w, h, null, 0, w);
+            for (int p : px) {
+                if ((p >>> 24) == 0) return true;
+            }
+            return false;
+        } catch (Exception e) {
+            log.debug("Не удалось проверить прозрачность: {}", e.getMessage());
+            return false;
         }
     }
 

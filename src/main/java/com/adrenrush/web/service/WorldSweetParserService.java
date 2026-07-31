@@ -7,7 +7,6 @@ import org.jsoup.Jsoup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -18,14 +17,9 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeSet;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * Парсер каталога Monster магазина worldsweet.ru — пришёл на смену ручному парсеру
@@ -60,7 +54,7 @@ import java.util.stream.Stream;
  */
 @Service
 @RequiredArgsConstructor
-public class WorldSweetParserService {
+public class WorldSweetParserService implements CatalogParser {
 
     private static final Logger log = LoggerFactory.getLogger(WorldSweetParserService.class);
     private static final String USER_AGENT =
@@ -103,39 +97,26 @@ public class WorldSweetParserService {
     private static final Pattern SERVING_VOLUME = Pattern.compile(
         "(\\d{2,4})\\s*(?:мл|ml)\\b",
         Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE | Pattern.UNICODE_CHARACTER_CLASS);
-    /** Всё, что не буква и не цифра — разделитель при разборе названия на слова. */
-    private static final Pattern NON_WORD = Pattern.compile("[^\\p{L}\\p{N}]+");
-    /** Скобочная вставка — в магазине это русская транслитерация названия, для опознания вкуса лишняя. */
-    private static final Pattern PARENTHESES = Pattern.compile("\\([^)]*\\)");
-
     /**
      * «Банка-переросток»: если тот же вкус есть в другом объёме, 710 мл не берём (решение владельца
      * каталога). Единственный вариант вкуса на 710 мл при этом сохраняется — иначе вкус пропал бы.
      */
     private static final int OVERSIZED_ML = 710;
 
-    /** Страна-изготовитель в названии — на различие вкусов не влияет, в карточку не попадает. */
-    private static final Set<String> COUNTRY_WORDS = Set.of(
-        "сша", "америка", "американский", "китай", "япония", "турция", "европа", "ирландия",
-        "корея", "тайланд", "вьетнам", "польша", "нидерланды", "германия", "англия",
-        "usa", "china", "japan", "europe");
-
-    /** Те же страны, но как регулярка — чтобы вырезать их из названия карточки. */
+    /** Страны-изготовители как регулярка — чтобы вырезать их из названия карточки. */
     private static final Pattern COUNTRY_IN_NAME = Pattern.compile(
-        "\\b(?:" + String.join("|", COUNTRY_WORDS) + ")\\b",
+        "\\b(?:" + String.join("|", FlavorKeys.COUNTRY_WORDS) + ")\\b",
+        Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE | Pattern.UNICODE_CHARACTER_CLASS);
+    /**
+     * Магазинная пометка «БЕЗ САХАРА» в хвосте названия. В карточку не идёт: у большинства позиций
+     * она дублирует Zero/Ultra в самом названии продукта, а капслоком выглядит как часть имени.
+     */
+    private static final Pattern ZERO_SUGAR_LABEL = Pattern.compile(
+        "\\bбез\\s+сахара\\b",
         Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE | Pattern.UNICODE_CHARACTER_CLASS);
 
-    /**
-     * Слова, которые не участвуют в опознании вкуса: сам бренд, страна, тара и дубли пометки
-     * «без сахара» (её же несёт слово Zero, которое как раз оставляем — «Original» и
-     * «Original Zero Sugar» это разные напитки).
-     */
-    private static final Set<String> KEY_STOP_WORDS = Stream.concat(COUNTRY_WORDS.stream(), Stream.of(
-        "monster", "monsters", "energy", "drink", "монстер", "монстр", "монстра", "монстеры",
-        "энерджи", "без", "сахара", "sugar", "стекло", "банка", "пэт", "шт")).collect(Collectors.toUnmodifiableSet());
-
-    private final DrinkService drinkService;
     private final ObjectMapper objectMapper;
+    private final FlavorKeys flavorKeys;
 
     @Value("${worldsweet.parser.url}")
     private String catalogUrl;
@@ -152,24 +133,22 @@ public class WorldSweetParserService {
     @Value("${worldsweet.parser.brand:Monster}")
     private String brand;
 
-    /** Ежедневный запуск по cron из application.properties (по умолчанию в 05:00, со сдвигом от других парсеров). */
-    @Scheduled(cron = "${worldsweet.parser.cron:0 0 5 * * *}")
-    public void scheduledParse() {
-        if (!enabled) return;
-        log.info("Запланированный парсинг каталога worldsweet.ru");
-        parse(false);
+    @Override
+    public String source() {
+        return SOURCE;
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return enabled;
     }
 
     /**
-     * Обходит все товары раздела каталога, схлопывает один вкус в разных объёмах и заводит карточки.
-     * Дедупликация в БД — по ссылке на страницу товара (permalink): у магазина есть стабильный URL
-     * у каждой позиции.
-     *
-     * @param reparse false — заводятся только новые карточки; true — у существующих обновляются
-     *                название/описание/бренд из источника
-     * @return сводка: создано/обновлено
+     * Обходит все товары раздела каталога и схлопывает один вкус в разных объёмах. Ничего не пишет
+     * в базу: найденное уходит в приёмку, где решение принимает администратор.
      */
-    public DrinkService.ParseResult parse(boolean reparse) {
+    @Override
+    public List<ParsedItem> collect() {
         try {
             String origin = origin(catalogUrl);
             String slug = lastSegment(catalogUrl);
@@ -179,67 +158,25 @@ public class WorldSweetParserService {
             if (root == null) {
                 log.warn("WorldSweet-парсер: категория «{}» не найдена в каталоге {} — проверьте worldsweet.parser.url",
                     slug, origin);
-                return new DrinkService.ParseResult(0, 0);
+                return List.of();
             }
 
             List<Candidate> candidates = collectCandidates(origin, root, categories);
             if (candidates.isEmpty()) {
                 log.warn("WorldSweet-парсер: в категории «{}» не найдено ни одного товара. "
                     + "Store API мог быть отключён на сайте либо категория опустела.", root.name());
-                return new DrinkService.ParseResult(0, 0);
+                return List.of();
             }
             List<Candidate> chosen = dropVolumeDuplicates(candidates);
-            Map<String, DrinkService.ExistingDrink> catalog = indexExisting();
+            log.info("WorldSweet-парсер: найдено позиций {} (товаров в каталоге: {}, схлопнуто дублей по объёму: {})",
+                chosen.size(), candidates.size(), candidates.size() - chosen.size());
 
-            int created = 0;
-            int updated = 0;
-            int failed = 0;
-            int alreadyInCatalog = 0;
-            for (Candidate c : chosen) {
-                DrinkService.ExistingDrink twin = catalog.get(matchKey(c.brand(), c.flavorKey()));
-                if (twin != null && !c.sourceUrl().equals(twin.sourceUrl())) {
-                    // этот вкус уже заведён с другого сайта (например, старым парсером
-                    // monsterenergy.com) — второй карточки быть не должно
-                    alreadyInCatalog++;
-                    log.debug("WorldSweet-парсер: '{}' пропущен — уже есть карточка #{} «{}»",
-                        c.name(), twin.id(), twin.name());
-                    continue;
-                }
-                try {
-                    // downloadCover=true — картинки лежат на самом сайте (wp-content/uploads), качаются
-                    // без троттлинга, поэтому сразу переносим их в наше хранилище.
-                    DrinkService.ParseOutcome outcome = drinkService.upsertFromParser(
-                        c.name(), c.description(), c.brand(), c.imageUrl(), c.sourceUrl(), true, reparse);
-                    if (outcome == DrinkService.ParseOutcome.CREATED) {
-                        created++;
-                        log.info("WorldSweet-парсер: добавлен энергетик '{}' ({})", c.name(), c.sourceUrl());
-                    } else if (outcome == DrinkService.ParseOutcome.UPDATED) {
-                        updated++;
-                    }
-                } catch (Exception e) {
-                    // одна битая позиция (недоступная картинка, отказ БД) не должна ронять весь обход
-                    failed++;
-                    log.warn("WorldSweet-парсер: не удалось сохранить '{}' ({}): {}",
-                        c.name(), c.sourceUrl(), e.getMessage());
-                }
-            }
-            if (failed > 0) {
-                log.warn("WorldSweet-парсер: пропущено с ошибкой позиций: {}", failed);
-            }
-
-            int merged = candidates.size() - chosen.size();
-            String details = String.format(
-                "товаров в каталоге: %d, схлопнуто дублей по объёму: %d, уже есть в базе с другого источника: %d",
-                candidates.size(), merged, alreadyInCatalog);
-            if (created == 0 && updated == 0) {
-                log.info("WorldSweet-парсер: изменений не найдено ({})", details);
-            } else {
-                log.info("WorldSweet-парсер: создано {}, обновлено {} ({})", created, updated, details);
-            }
-            return new DrinkService.ParseResult(created, updated);
+            return chosen.stream()
+                .map(c -> new ParsedItem(c.name(), c.description(), c.brand(), c.imageUrl(), c.sourceUrl(), SOURCE))
+                .toList();
         } catch (Exception e) {
             log.warn("WorldSweet-парсер: ошибка обхода {}: {}", catalogUrl, e.getMessage());
-            return new DrinkService.ParseResult(0, 0);
+            return List.of();
         }
     }
 
@@ -281,35 +218,14 @@ public class WorldSweetParserService {
                     brand != null && !brand.isBlank() ? brand.trim() : brandOf(product, categories, root.id()),
                     imageUrl,
                     sourceUrl,
-                    flavorKey(shopName),
-                    volumeOf(shopName),
-                    mentionsCountry(shopName)));
+                    flavorKeys.flavorKey(shopName),
+                    flavorKeys.volumeOf(shopName),
+                    flavorKeys.mentionsCountry(shopName)));
             }
 
             if (products.size() < PAGE_SIZE) break;
         }
         return candidates;
-    }
-
-    /**
-     * Индекс уже заведённых карточек по «бренд + вкус». Нужен потому, что один и тот же напиток
-     * попадал в базу и от старого парсера monsterenergy.com («Monster Ultra Paradise»), и отсюда
-     * («Monster Energy Ultra Paradise 500 мл БЕЗ САХАРА»): ссылки разные, поэтому дедупликация по
-     * {@code sourceUrl} такие пары не ловит. При коллизии ключей выигрывает первая карточка —
-     * какая именно, не важно: обе означают «вкус уже есть, второй раз заводить не нужно».
-     */
-    private Map<String, DrinkService.ExistingDrink> indexExisting() {
-        Map<String, DrinkService.ExistingDrink> index = new LinkedHashMap<>();
-        for (DrinkService.ExistingDrink d : drinkService.listExisting()) {
-            if (d.name() == null || d.name().isBlank()) continue;
-            index.putIfAbsent(matchKey(d.brand(), flavorKey(cleanName(d.name()))), d);
-        }
-        return index;
-    }
-
-    /** Ключ сопоставления карточек: вкусы разных брендов («Original» у Monster и Red Bull) не путаем. */
-    private String matchKey(String brand, String flavorKey) {
-        return (brand == null ? "" : brand.trim().toLowerCase(Locale.ROOT)) + "|" + flavorKey;
     }
 
     /**
@@ -346,37 +262,6 @@ public class WorldSweetParserService {
         if (candidateOversized != currentOversized) return currentOversized;
         if (candidate.volumeMl() != current.volumeMl()) return candidate.volumeMl() > current.volumeMl();
         return current.fromCountry() && !candidate.fromCountry();
-    }
-
-    /**
-     * Опознание вкуса: из названия выкидываются объём, бренд, страна и тара, остальные слова
-     * приводятся к нижнему регистру и сортируются — порядок слов в магазине не устоялся
-     * («Ultra Zero 500 мл БЕЗ САХАРА» и «Zero Ultra 710мл США» — один и тот же напиток).
-     * Скобки тоже отбрасываются: в них магазин кладёт русскую транслитерацию латинского названия
-     * («Java Mean Bean (Монстр Джава Мин Бин)»), и без этого такая пара не схлопывается.
-     */
-    private String flavorKey(String name) {
-        String stripped = PARENTHESES.matcher(name.toLowerCase(Locale.ROOT)).replaceAll(" ");
-        stripped = SERVING_VOLUME.matcher(stripped).replaceAll(" ");
-        Set<String> tokens = new TreeSet<>();
-        for (String token : NON_WORD.split(stripped)) {
-            if (!token.isBlank() && !KEY_STOP_WORDS.contains(token)) tokens.add(token);
-        }
-        return String.join(" ", tokens);
-    }
-
-    /** Объём порции в мл из названия (0 — если не указан). */
-    private int volumeOf(String name) {
-        Matcher m = SERVING_VOLUME.matcher(name);
-        return m.find() ? Integer.parseInt(m.group(1)) : 0;
-    }
-
-    /** Есть ли в названии страна-изготовитель («… 473мл Америка»). */
-    private boolean mentionsCountry(String name) {
-        for (String token : NON_WORD.split(name.toLowerCase(Locale.ROOT))) {
-            if (COUNTRY_WORDS.contains(token)) return true;
-        }
-        return false;
     }
 
     /**
@@ -429,14 +314,16 @@ public class WorldSweetParserService {
     }
 
     /**
-     * Убирает из названия объём и страну-изготовителя («Monster Ultra Vice Guava 500мл США» →
-     * «Monster Ultra Vice Guava»): в карточку каталога они не нужны — одна карточка на вкус, а
-     * какого объёма банку человек пил, к оценке отношения не имеет. Вызывать только после
-     * {@link #cleanName} и после того, как объём уже считан для выбора варианта.
+     * Убирает из названия оптовые пометки: объём, страну-изготовителя и «БЕЗ САХАРА»
+     * («Monster Energy Ultra Paradise 500 мл БЕЗ САХАРА» → «Monster Energy Ultra Paradise»). В
+     * карточке каталога они не нужны — она одна на вкус, а какого объёма банку человек пил, к
+     * оценке отношения не имеет. Вызывать только после {@link #cleanName} и после того, как объём
+     * уже считан для выбора варианта.
      */
     private String stripVolumeAndCountry(String name) {
         String s = SERVING_VOLUME.matcher(name).replaceAll(" ");
         s = COUNTRY_IN_NAME.matcher(s).replaceAll(" ");
+        s = ZERO_SUGAR_LABEL.matcher(s).replaceAll(" ");
         return trimPunctuation(normalize(s));
     }
 

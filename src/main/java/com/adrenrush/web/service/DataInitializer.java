@@ -24,7 +24,7 @@ public class DataInitializer implements ApplicationRunner {
     private final UserRepository userRepository;
     private final BCryptPasswordEncoder passwordEncoder;
     private final DrinkService drinkService;
-    private final ParserService parserService;
+    private final ParserStagingService stagingService;
     private final SuperAdmins superAdmins;
     private final JdbcTemplate jdbcTemplate;
 
@@ -44,7 +44,7 @@ public class DataInitializer implements ApplicationRunner {
         ensureAdmin();
         promoteSuperAdmins();
         drinkService.backfillMissingBrands();
-        firstRunParse();
+        firstRunScan();
     }
 
     /**
@@ -111,13 +111,18 @@ public class DataInitializer implements ApplicationRunner {
         log.info("Создан администратор по умолчанию: логин '{}' (смените пароль!)", adminUsername);
     }
 
-    private void firstRunParse() {
+    /**
+     * При пустой базе обходит источники, чтобы приёмка не была пустой и администратору было что
+     * принимать с первого захода. Карточки при этом не создаются — их заводит уже человек в окне
+     * «Парсинг каталогов» (см. {@link ParserStagingService}).
+     */
+    private void firstRunScan() {
         if (!parserEnabled) return;
         if (drinkService.count() > 0) return;
-        log.info("База энергетиков пуста — выполняем полный первичный парсинг каталога");
+        log.info("База энергетиков пуста — собираем позиции источников в приёмку");
         new Thread(() -> {
-            DrinkService.ParseResult r = parserService.parse(false);
-            log.info("Первичный парсинг завершён: создано {} энергетиков", r.created());
-        }, "initial-parser").start();
+            ParserStagingService.ScanResult r = stagingService.scan(stagingService.availableSources());
+            log.info("Первичный обход завершён: найдено {}, в приёмке новых {}", r.found(), r.added());
+        }, "initial-scan").start();
     }
 }

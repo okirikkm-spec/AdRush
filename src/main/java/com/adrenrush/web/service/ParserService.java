@@ -8,21 +8,23 @@ import org.jsoup.select.Elements;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
  * Парсер ассортимента Adrenaline Rush с официального сайта adrenalinerush.ru.
  * Сайт — Nuxt SSR-страница: товары рендерятся в DOM как карточки .product-item.
- * Раз в сутки перепроверяет список и заводит карточки для новых вкусов
- * (при пустой базе — полный первичный обход).
+ *
+ * В базу ничего не пишет: найденное уходит в приёмку ({@link ParserStagingService}), где
+ * администратор решает, что добавить в каталог.
  */
 @Service
 @RequiredArgsConstructor
-public class ParserService {
+public class ParserService implements CatalogParser {
 
     private static final Logger log = LoggerFactory.getLogger(ParserService.class);
     private static final String USER_AGENT =
@@ -31,31 +33,28 @@ public class ParserService {
     /** Бренд, который проставляется всем карточкам из этого каталога. */
     public static final String BRAND = "Adrenaline Rush";
 
-    private final DrinkService drinkService;
-
     @Value("${parser.url}")
     private String catalogUrl;
 
     @Value("${parser.enabled:true}")
     private boolean enabled;
 
-    /** Ежедневный запуск по cron из application.properties. */
-    @Scheduled(cron = "${parser.cron:0 0 4 * * *}")
-    public void scheduledParse() {
-        if (!enabled) return;
-        log.info("Запланированный парсинг ассортимента adrenalinerush.ru");
-        parse(false);
+    @Override
+    public String source() {
+        return BRAND;
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return enabled;
     }
 
     /**
-     * Обходит все карточки товаров на странице. Дедупликация — по ссылке изображения
-     * (у SPA нет отдельных URL у товаров).
-     *
-     * @param reparse false — заводятся только новые карточки; true — у существующих обновляются
-     *                название/описание из источника
-     * @return сводка: создано/обновлено
+     * Обходит все карточки товаров на странице. Дедупликация в рамках прохода — по ссылке
+     * изображения: у этого SPA нет отдельных URL у товаров, поэтому она же служит {@code sourceUrl}.
      */
-    public DrinkService.ParseResult parse(boolean reparse) {
+    @Override
+    public List<ParsedItem> collect() {
         try {
             Document doc = Jsoup.connect(catalogUrl)
                 .userAgent(USER_AGENT)
@@ -65,11 +64,10 @@ public class ParserService {
             Elements cards = doc.select("div.product-item");
             if (cards.isEmpty()) {
                 log.warn("Парсер: не найдено ни одной карточки (div.product-item). Структура сайта могла измениться.");
-                return new DrinkService.ParseResult(0, 0);
+                return List.of();
             }
 
-            int created = 0;
-            int updated = 0;
+            List<ParsedItem> items = new ArrayList<>();
             Set<String> seen = new HashSet<>();
 
             for (Element card : cards) {
@@ -82,30 +80,17 @@ public class ParserService {
                 String name = normalize(titleEl.text());
                 String imageUrl = bestImage(img);
                 if (name.isBlank() || imageUrl == null) continue;
-
-                // ключ дедупликации в рамках одного прохода — ссылка на картинку
                 if (!seen.add(imageUrl)) continue;
 
                 String description = descEl != null ? normalize(descEl.text()) : null;
-
-                // sourceUrl = imageUrl: уникальный стабильный ключ для дедупликации
-                DrinkService.ParseOutcome outcome =
-                    drinkService.upsertFromParser(name, description, BRAND, imageUrl, imageUrl, true, reparse);
-                if (outcome == DrinkService.ParseOutcome.CREATED) {
-                    created++;
-                    log.info("Парсер: добавлен энергетик '{}' ({})", name, imageUrl);
-                } else if (outcome == DrinkService.ParseOutcome.UPDATED) {
-                    updated++;
-                }
+                items.add(new ParsedItem(name, description, BRAND, imageUrl, imageUrl, BRAND));
             }
 
-            if (created == 0 && updated == 0) {
-                log.info("Парсер: изменений не найдено");
-            }
-            return new DrinkService.ParseResult(created, updated);
+            log.info("Парсер adrenalinerush.ru: найдено позиций {}", items.size());
+            return items;
         } catch (Exception e) {
             log.warn("Парсер: ошибка обхода {}: {}", catalogUrl, e.getMessage());
-            return new DrinkService.ParseResult(0, 0);
+            return List.of();
         }
     }
 

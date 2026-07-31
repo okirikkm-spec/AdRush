@@ -367,22 +367,52 @@ public class DrinkService {
             if (photo.getSource() == PhotoSource.PARSED && cutBackgroundInPlace(photo)) {
                 return PhotoOutcome.DEBACKGROUNDED;
             }
-            if (photo.getThumbUrl() == null) {
+            if (photo.getThumbUrl() == null || thumbnailLostTransparency(photo)) {
                 String key = storageKeyOf(url);
                 byte[] data = storageService.readBytes(url);
                 if (key == null || data == null) return PhotoOutcome.SKIPPED;
                 String ct = firstNonNull(sniffImageContentType(data),
                     firstNonNull(contentTypeFromUrl(url), "image/jpeg"));
+                String oldThumb = photo.getThumbUrl();
                 String thumbUrl = generateAndStoreThumb(key, data, ct);
-                if (thumbUrl == null) return PhotoOutcome.SKIPPED;
+                if (thumbUrl == null) {
+                    // для мелкого пэкшота превью не даёт выигрыша; если старое при этом испорчено
+                    // (потеряло прозрачность) — убираем его совсем, карточка возьмёт оригинал
+                    if (oldThumb == null) return PhotoOutcome.SKIPPED;
+                    photo.setThumbUrl(null);
+                    photoRepository.save(photo);
+                    storageService.delete(oldThumb);
+                    log.info("optimizeMedia: у фото #{} убрано испорченное превью {}", photo.getId(), oldThumb);
+                    return PhotoOutcome.THUMBNAILED;
+                }
                 photo.setThumbUrl(thumbUrl);
                 photoRepository.save(photo);
+                if (!thumbUrl.equals(oldThumb)) storageService.delete(oldThumb);
                 return PhotoOutcome.THUMBNAILED;
             }
             return PhotoOutcome.SKIPPED;
         } catch (Exception e) {
             log.warn("optimizeMedia: фото {} ({}) — {}", photoId, url, e.getMessage());
             return PhotoOutcome.FAILED;
+        }
+    }
+
+    /**
+     * Превью потеряло прозрачность: оригинал с прозрачным фоном, а уменьшенная копия — нет. Так
+     * получалось у палитровых PNG (альфа в чанке tRNS) — на карточке банка оказывалась на чёрном
+     * прямоугольнике, хотя в увеличенном виде фона нет. Такие превью пересобираются заново.
+     */
+    private boolean thumbnailLostTransparency(DrinkPhoto photo) {
+        String thumbUrl = photo.getThumbUrl();
+        if (thumbUrl == null || !thumbUrl.toLowerCase(Locale.ROOT).endsWith(".png")) return false;
+        try {
+            byte[] original = storageService.readBytes(photo.getUrl());
+            if (original == null || !imageService.hasTransparentPixels(original)) return false;
+            byte[] thumb = storageService.readBytes(thumbUrl);
+            return thumb != null && !imageService.hasTransparentPixels(thumb);
+        } catch (Exception e) {
+            log.debug("Не удалось сверить прозрачность превью {}: {}", thumbUrl, e.getMessage());
+            return false;
         }
     }
 
@@ -520,7 +550,9 @@ public class DrinkService {
             .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                 + "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
             .header("Accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8")
-            .timeout(20000)
+            // 60с, а не 20: пэкшоты магазинов доходят до 2 МБ, и на неспешном канале загрузка
+            // не укладывалась в 20с — обложка оставалась внешней ссылкой (и с белым фоном)
+            .timeout(60000)
             .maxBodySize(25 * 1024 * 1024)
             .execute();
 

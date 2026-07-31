@@ -988,6 +988,41 @@ a.mini-review-name:hover { color: var(--accent); }
 }
 .opt.sel .opt-meta { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
 
+/* ─── Приёмка каталога: список найденного парсерами (ParseStagingModal) ─── */
+/* шире обычного пикера: в строке идут пэкшот, редактируемое название и описание */
+.modal-staging { max-width: 720px; }
+.staging-list { display: flex; flex-direction: column; gap: 8px; }
+.staging-row {
+  display: flex; align-items: flex-start; gap: 12px; padding: 11px 13px;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius);
+  transition: border-color .15s, background .15s;
+}
+.staging-row.sel { border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: var(--accent-dim); }
+.staging-check { cursor: pointer; margin-top: 6px; }
+.staging-row.sel .staging-check { background: var(--accent); border-color: var(--accent); }
+/* пэкшот приходит с сайта-источника (на белом фоне) — светлая подложка, чтобы он не «висел» в тёмном */
+.staging-thumb {
+  width: 54px; height: 68px; flex-shrink: 0; object-fit: contain;
+  border-radius: 8px; background: #fff; padding: 3px;
+}
+.staging-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.staging-name { font-weight: 700; font-size: 14px; padding: 7px 10px; }
+.staging-name-static { font-weight: 700; font-size: 14px; padding: 3px 0; }
+.staging-desc { font-size: 13px; padding: 7px 10px; resize: vertical; min-height: 40px; }
+.staging-meta {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+  font-size: 12px; color: var(--text-muted);
+}
+.staging-meta a { color: var(--accent); text-decoration: none; }
+.staging-meta a:hover { text-decoration: underline; }
+/* подсказка «похоже на …»: такие позиции по умолчанию без галочки — вероятный дубль */
+.staging-warn {
+  padding: 1px 9px; border-radius: 100px; font-weight: 700;
+  color: var(--warn, #e0a03a); background: color-mix(in srgb, var(--warn, #e0a03a) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn, #e0a03a) 35%, transparent);
+}
+.staging-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+
 /* сегментированный переключатель режима парсинга */
 .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .seg-btn {

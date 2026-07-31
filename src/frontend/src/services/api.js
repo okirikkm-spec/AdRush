@@ -205,13 +205,37 @@ export function updateCoverFraming(id, framing) {
 export function reorderDrinkPhotos(id, order) {
   return jsonRequest(`/api/drinks/${id}/photos/order`, { method: "PUT", body: { order }, auth: true });
 }
-/** Бренды, для которых на бэкенде есть парсер каталога. */
+/** Источники, для которых на бэкенде есть парсер каталога. */
 export function fetchParseSources() {
   return jsonRequest(`/api/drinks/parse/sources`, { auth: true });
 }
-/** Запустить парсинг выбранных брендов. reparse=false — только новые; true — обновить и существующие. */
-export function runParse({ brands, reparse = false }) {
-  return jsonRequest(`/api/drinks/parse`, { method: "POST", body: { brands, reparse }, auth: true });
+/**
+ * Обойти выбранные источники. Карточки не создаются: найденное попадает в приёмку,
+ * откуда его подтверждают через applyCandidates(). Возвращает { found, added, updated, ... }.
+ */
+export function runParse({ brands }) {
+  return jsonRequest(`/api/drinks/parse`, { method: "POST", body: { brands }, auth: true });
+}
+/** Позиции приёмки: status "PENDING" (ждут решения) или "IGNORED" (отклонённые ранее). */
+export function fetchParseCandidates(status = "PENDING") {
+  return jsonRequest(`/api/drinks/parse/candidates?status=${status}`, { auth: true });
+}
+/**
+ * Применить решение: accept — [{ id, name, description }] станут карточками каталога,
+ * ignore — [id] уйдут в игнор и больше не будут предлагаться.
+ */
+export function applyCandidates({ accept = [], ignore = [] }) {
+  return jsonRequest(`/api/drinks/parse/candidates/apply`, {
+    method: "POST", body: { accept, ignore }, auth: true,
+  });
+}
+/** Вернуть позицию из игнора в список ожидающих решения. */
+export function unignoreCandidate(id) {
+  return jsonRequest(`/api/drinks/parse/candidates/${id}/unignore`, { method: "POST", auth: true });
+}
+/** Убрать позицию из приёмки совсем (товар исчез из магазина). */
+export function forgetCandidate(id) {
+  return jsonRequest(`/api/drinks/parse/candidates/${id}`, { method: "DELETE", auth: true });
 }
 /**
  * Оптимизация медиа: скачать внешние картинки в наше хранилище и достроить недостающие превью.

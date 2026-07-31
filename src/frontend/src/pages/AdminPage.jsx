@@ -4,8 +4,10 @@ import Navbar from "../components/Navbar";
 import ImageDropZone from "../components/ImageDropZone";
 import UserModeration from "../components/UserModeration";
 import AuditLog from "../components/AuditLog";
-import { fetchMe, createDrink, fetchParseSources, runParse, addDrinkPhoto, addDrinkPhotoByUrl, optimizeMedia } from "../services/api";
-import { CheckIcon } from "../components/icons";
+import ParseStagingModal from "../components/ParseStagingModal";
+import {
+  fetchMe, createDrink, fetchParseCandidates, addDrinkPhoto, addDrinkPhotoByUrl, optimizeMedia,
+} from "../services/api";
 
 export default function AdminPage() {
   const navigate = useNavigate();
@@ -116,18 +118,26 @@ function AddDrinkCard({ onCreated }) {
 
 function ParserCard() {
   const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState(null);
+
+  useEffect(() => {
+    fetchParseCandidates("PENDING")
+      .then((r) => setPending(r.counts?.pending ?? 0))
+      .catch(() => {});
+  }, [open]);
 
   return (
     <div className="card">
       <div className="card-title">🔄 Парсинг каталогов</div>
       <div className="badge-info" style={{ marginBottom: 14 }}>
-        Каталоги автоматически проверяются раз в сутки. Здесь можно запустить парсинг вручную —
-        выбрать бренды и режим (только новые или перепарсить все).
+        Каталоги проверяются раз в сутки, но карточки сами не создаются: найденное ждёт в приёмке.
+        Откройте её, отметьте нужные напитки (названия можно поправить на месте) и добавьте в каталог.
+        Отклонённые запоминаются и больше не предлагаются.
       </div>
       <button className="btn btn-secondary" onClick={() => setOpen(true)}>
-        Парсинг…
+        Приёмка{pending ? ` · ${pending}` : ""}…
       </button>
-      {open && <ParseModal onClose={() => setOpen(false)} />}
+      {open && <ParseStagingModal onClose={() => setOpen(false)} />}
     </div>
   );
 }
@@ -170,109 +180,3 @@ function MediaOptimizeCard() {
   );
 }
 
-function ParseModal({ onClose }) {
-  const [sources, setSources] = useState([]);
-  const [selected, setSelected] = useState(() => new Set());
-  const [reparse, setReparse] = useState(false);
-  const [running, setRunning] = useState(false);
-  const [msg, setMsg] = useState(null);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    fetchParseSources()
-      .then((list) => { setSources(list); setSelected(new Set(list)); })
-      .catch((e) => setError(e.message));
-  }, []);
-
-  const toggle = (brand) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      next.has(brand) ? next.delete(brand) : next.add(brand);
-      return next;
-    });
-  };
-
-  const allSelected = sources.length > 0 && sources.every((b) => selected.has(b));
-  const setAll = () => setSelected(allSelected ? new Set() : new Set(sources));
-
-  const run = async () => {
-    setMsg(null);
-    setError(null);
-    setRunning(true);
-    try {
-      const res = await runParse({ brands: [...selected], reparse });
-      const updated = res.updated || 0;
-      setMsg(`Готово. Добавлено новых: ${res.created}` + (reparse ? ` · обновлено: ${updated}` : ""));
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setRunning(false);
-    }
-  };
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-picker" onClick={(e) => e.stopPropagation()} role="dialog">
-        <div className="picker-head">
-          <div className="picker-head-main">
-            <span className="picker-icon">🔄</span>
-            <div>
-              <h2 className="picker-title">Парсинг каталогов</h2>
-              <p className="picker-sub">Выберите бренды и режим обновления</p>
-            </div>
-          </div>
-          <button className="modal-close" onClick={onClose} aria-label="Закрыть">×</button>
-        </div>
-
-        <div className="picker-body">
-          <div className="picker-section-label">Бренды</div>
-          {sources.length === 0 && !error && <div className="muted" style={{ fontSize: 13 }}>Загрузка…</div>}
-          {sources.length > 0 && (
-            <>
-              <button type="button" className={`opt opt-all ${allSelected ? "sel" : ""}`} onClick={setAll}>
-                <span className="opt-check">{allSelected && <CheckIcon />}</span>
-                <span className="opt-label">Все каталоги</span>
-                <span className="opt-meta">{sources.length}</span>
-              </button>
-              <div className="picker-divider" />
-              <div className="opt-list">
-                {sources.map((brand) => (
-                  <button
-                    type="button" key={brand}
-                    className={`opt ${selected.has(brand) ? "sel" : ""}`}
-                    onClick={() => toggle(brand)}
-                  >
-                    <span className="opt-check">{selected.has(brand) && <CheckIcon />}</span>
-                    <span className="opt-label">{brand}</span>
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-
-          <div className="picker-section-label" style={{ marginTop: 18 }}>Режим</div>
-          <div className="seg">
-            <button type="button" className={`seg-btn ${!reparse ? "on" : ""}`} onClick={() => setReparse(false)}>
-              <span className="seg-title">Только новые</span>
-              <span className="seg-sub">Добавить отсутствующие</span>
-            </button>
-            <button type="button" className={`seg-btn ${reparse ? "on" : ""}`} onClick={() => setReparse(true)}>
-              <span className="seg-title">Перепарсить всё</span>
-              <span className="seg-sub">Обновить существующие</span>
-            </button>
-          </div>
-
-          {error && <div className="error-text">{error}</div>}
-          {msg && <div className="picker-result">{msg}</div>}
-        </div>
-
-        <div className="picker-foot">
-          <button className="btn btn-secondary" onClick={onClose} disabled={running}>Закрыть</button>
-          <button className="btn btn-primary" onClick={run} disabled={running || selected.size === 0}>
-            {running ? "Парсинг…" : "Запустить"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
