@@ -135,6 +135,29 @@ export function SearchIcon({ size = 16 }) {
   );
 }
 
+/** Открытый глаз — показать введённый пароль. */
+export function EyeIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M1.5 12S5 5 12 5s10.5 7 10.5 7-3.5 7-10.5 7S1.5 12 1.5 12z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+/** Перечёркнутый глаз — скрыть пароль. */
+export function EyeOffIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M9.9 4.24A10.9 10.9 0 0 1 12 4c7 0 10.5 7 10.5 7a13.4 13.4 0 0 1-2.35 3.22M6.6 6.6C3.7 8.4 1.5 12 1.5 12s3.5 7 10.5 7a10.5 10.5 0 0 0 5.4-1.6" />
+      <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+      <path d="M2 2l20 20" />
+    </svg>
+  );
+}
+
 /** Щит с галочкой — заголовок двухфакторной аутентификации. */
 export function ShieldIcon({ size = 16 }) {
   return (

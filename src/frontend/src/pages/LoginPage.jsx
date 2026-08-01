@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { login, saveToken } from "../services/api";
 import BrandText from "../components/BrandText";
+import PasswordField from "../components/PasswordField";
 
 function Bolt() {
   return (
@@ -51,11 +52,11 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit}>
           <div className="input-group">
-            <input className="input" placeholder="Логин" value={username}
+            <input className="input" name="username" autoComplete="username" placeholder="Логин" value={username}
               onChange={(e) => setUsername(e.target.value)} autoFocus required disabled={needs2fa} />
           </div>
           <div className="input-group">
-            <input className="input" type="password" placeholder="Пароль" value={password}
+            <PasswordField name="password" autoComplete="current-password" placeholder="Пароль" value={password}
               onChange={(e) => setPassword(e.target.value)} required disabled={needs2fa} />
           </div>
 

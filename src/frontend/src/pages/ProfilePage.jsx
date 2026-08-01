@@ -7,6 +7,7 @@ import RatingStars from "../components/RatingStars";
 import OtpInput from "../components/OtpInput";
 import BannerFramerModal from "../components/BannerFramerModal";
 import BannerLayer, { framingOf } from "../components/BannerLayer";
+import PasswordField from "../components/PasswordField";
 import {
   UserIcon, SettingsIcon, TrophyIcon, MailIcon, ShieldIcon,
   CopyIcon, CheckIcon, EditIcon, ImageIcon, CloseIcon,
@@ -406,7 +407,8 @@ function EmailCard() {
     if (await run(() => cancelEmailBinding())) { setCode(""); setMsg(null); }
   };
 
-  const unbind = async () => {
+  const unbind = async (e) => {
+    e.preventDefault();
     if (await run(() => unbindEmail(password), "Почта отвязана")) {
       setPassword(""); setUnbindOpen(false); setEmail("");
     }
@@ -435,17 +437,17 @@ function EmailCard() {
               <div className="muted" style={{ fontSize: 13, marginBottom: 8 }}>
                 Подтвердите паролем, чтобы отвязать почту.
               </div>
-              <div className="row">
-                <input className="input" style={{ maxWidth: 260 }} type="password"
+              <form className="row" onSubmit={unbind}>
+                <PasswordField style={{ maxWidth: 260 }} name="current-password" autoComplete="current-password"
                   placeholder="Пароль от аккаунта" value={password}
                   onChange={(e) => setPassword(e.target.value)} />
-                <button className="btn btn-danger" onClick={unbind} disabled={busy || !password}>
+                <button type="submit" className="btn btn-danger" disabled={busy || !password}>
                   Отвязать
                 </button>
-                <button className="btn btn-secondary" onClick={() => { setUnbindOpen(false); setPassword(""); setErr(null); }}>
+                <button type="button" className="btn btn-secondary" onClick={() => { setUnbindOpen(false); setPassword(""); setErr(null); }}>
                   Отмена
                 </button>
-              </div>
+              </form>
             </>
           ) : (
             <button className="btn btn-secondary" onClick={() => { setUnbindOpen(true); setErr(null); setMsg(null); }}>
@@ -504,7 +506,8 @@ function PasswordCard() {
   const [newPassword, setNew] = useState("");
   const [msg, setMsg] = useState(null);
 
-  const save = async () => {
+  const save = async (e) => {
+    e.preventDefault();
     setMsg(null);
     try {
       await changePassword(oldPassword, newPassword);
@@ -516,19 +519,19 @@ function PasswordCard() {
   };
 
   return (
-    <div className="card">
+    <form className="card" onSubmit={save}>
       <div className="card-title">Сменить пароль</div>
       <div className="input-group">
-        <input className="input" type="password" placeholder="Текущий пароль"
+        <PasswordField name="current-password" autoComplete="current-password" placeholder="Текущий пароль"
           value={oldPassword} onChange={(e) => setOld(e.target.value)} />
       </div>
       <div className="input-group">
-        <input className="input" type="password" placeholder="Новый пароль"
+        <PasswordField name="new-password" autoComplete="new-password" placeholder="Новый пароль"
           value={newPassword} onChange={(e) => setNew(e.target.value)} />
       </div>
-      <button className="btn btn-primary" onClick={save}>Изменить пароль</button>
+      <button type="submit" className="btn btn-primary">Изменить пароль</button>
       {msg && <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>{msg}</div>}
-    </div>
+    </form>
   );
 }
 

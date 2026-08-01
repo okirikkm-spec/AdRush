@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import OtpInput from "../components/OtpInput";
+import PasswordField from "../components/PasswordField";
 import {
   recoverPassword, requestRecoverEmailCode, confirmRecoverEmail,
 } from "../services/api";
@@ -65,7 +66,7 @@ function TotpRecovery() {
   return (
     <form onSubmit={handleSubmit}>
       <div className="input-group">
-        <input className="input" placeholder="Логин" value={username}
+        <input className="input" name="username" autoComplete="username" placeholder="Логин" value={username}
           onChange={(e) => setUsername(e.target.value)} autoFocus required />
       </div>
       <div className="input-group">
@@ -74,7 +75,7 @@ function TotpRecovery() {
           onChange={(e) => setCode(e.target.value)} required />
       </div>
       <div className="input-group">
-        <input className="input" type="password" placeholder="Новый пароль" value={newPassword}
+        <PasswordField name="new-password" autoComplete="new-password" placeholder="Новый пароль" value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)} required />
       </div>
       <button type="submit" className="btn btn-primary btn-lg" disabled={loading}>
@@ -156,7 +157,7 @@ function EmailRecovery() {
           не подключена двухфакторная аутентификация.
         </p>
         <div className="input-group">
-          <input className="input" placeholder="Логин" value={username}
+          <input className="input" name="username" autoComplete="username" placeholder="Логин" value={username}
             onChange={(e) => setUsername(e.target.value)} autoFocus required />
         </div>
         <button type="submit" className="btn btn-primary btn-lg" disabled={loading || !username}>
@@ -181,7 +182,7 @@ function EmailRecovery() {
         <OtpInput value={code} onChange={setCode} />
       </div>
       <div className="input-group">
-        <input className="input" type="password" placeholder="Новый пароль" value={newPassword}
+        <PasswordField name="new-password" autoComplete="new-password" placeholder="Новый пароль" value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)} required />
       </div>
 

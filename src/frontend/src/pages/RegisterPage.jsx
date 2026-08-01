@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { register, saveToken } from "../services/api";
 import BrandText from "../components/BrandText";
+import PasswordField from "../components/PasswordField";
 
 function Bolt() {
   return (
@@ -44,11 +45,11 @@ export default function RegisterPage() {
 
         <form onSubmit={handleSubmit}>
           <div className="input-group">
-            <input className="input" placeholder="Логин" value={username}
+            <input className="input" name="username" autoComplete="username" placeholder="Логин" value={username}
               onChange={(e) => setUsername(e.target.value)} autoFocus required />
           </div>
           <div className="input-group">
-            <input className="input" type="password" placeholder="Пароль (мин. 4 символа)" value={password}
+            <PasswordField name="new-password" autoComplete="new-password" placeholder="Пароль (мин. 4 символа)" value={password}
               onChange={(e) => setPassword(e.target.value)} required />
           </div>
           <button type="submit" className="btn btn-primary btn-lg" disabled={loading}>

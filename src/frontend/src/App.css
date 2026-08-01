@@ -375,6 +375,17 @@ button.navbar-search-toggle { display: none; } /* показывается то�
 .input-label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 6px; font-weight: 600; }
 textarea.input { resize: vertical; min-height: 84px; line-height: 1.5; }
 
+/* ─── Поле пароля с переключателем видимости ─── */
+.password-field { position: relative; width: 100%; }
+.password-field .input { padding-right: 40px; }
+.password-field-toggle {
+  position: absolute; top: 50%; right: 4px; transform: translateY(-50%);
+  display: flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: var(--radius-sm); border: none;
+  background: transparent; color: var(--text-faint); cursor: pointer;
+}
+.password-field-toggle:hover { color: var(--text-muted); }
+
 /* ─────────────── Layout ─────────────── */
 .page { max-width: 920px; margin: 0 auto; padding: 28px 20px 80px; }
 .page-narrow { max-width: 560px; }
