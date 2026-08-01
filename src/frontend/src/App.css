@@ -228,9 +228,14 @@ button.navbar-search-toggle { display: none; } /* показывается то�
     width: auto; max-width: none; margin: 0; padding: 10px 13px;
     border-radius: 0; border-left: none; border-right: none; border-top: none;
     background: var(--surface); box-shadow: var(--shadow-lg); z-index: 140;
+    /* список результатов ниже становится обычным потоковым элементом (position: static),
+       поэтому в этой строчной flex-раскладке он обязан переноситься на новую строку —
+       без wrap он встаёт СПРАВА от поля и сжимает его до пары символов. */
+    flex-wrap: wrap;
   }
   .navbar-search.mobile-open .navbar-search-drop {
-    position: static; margin-top: 8px; max-height: 50vh;
+    position: static; flex: 0 0 100%; width: 100%;
+    margin-top: 8px; max-height: 50vh;
     box-shadow: none; border: none; background: transparent; padding: 0;
   }
 }
