@@ -90,12 +90,19 @@ export default function DrinkSearch() {
         <input
           ref={inputRef}
           className="navbar-search-input"
-          type="text"
+          type="search"
+          name="drink-search"
           placeholder="Найти энергетик…"
           value={query}
           onFocus={() => { ensureLoaded(); setOpen(true); }}
           onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
           aria-label="Поиск энергетиков"
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck="false"
+          data-lpignore="true"
+          data-1p-ignore
         />
         {query && (
           <button

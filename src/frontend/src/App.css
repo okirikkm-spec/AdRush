@@ -119,14 +119,19 @@ a { color: inherit; text-decoration: none; }
 /* ─────────────── Navbar ─────────────── */
 .navbar {
   position: sticky; top: 0; z-index: 100;
-  display: flex; align-items: center; justify-content: space-between;
+  /* 3 колонки: крайние — одинаковой ширины (--nav-side, JS меряет max(лого, действия) в
+     Navbar.jsx), поэтому средняя колонка с поиском всегда ровно по центру шапки. Если бы
+     колонки были просто 1fr/1fr, Grid не уравнивает их при разном контенте — поиск съезжал
+     бы к более узкой стороне. До первого измерения (--nav-side не задан) — обычный auto. */
+  display: grid; grid-template-columns: var(--nav-side, auto) 1fr var(--nav-side, auto);
+  align-items: center;
   gap: 16px; padding: 0 28px; height: 62px;
   background: color-mix(in srgb, var(--bg) 85%, transparent);
   backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--border);
 }
 .navbar-logo {
-  display: flex; align-items: center; gap: 9px;
+  display: flex; align-items: center; gap: 9px; justify-self: start;
   font-size: 19px; font-weight: 800; letter-spacing: -0.4px; user-select: none;
 }
 .navbar-logo .bolt { color: var(--accent); display: flex; }
@@ -145,21 +150,25 @@ a { color: inherit; text-decoration: none; }
   -webkit-background-clip: text; background-clip: text;
   -webkit-text-fill-color: transparent; color: transparent;
 }
-.navbar-actions { display: flex; align-items: center; gap: 10px; }
+.navbar-actions { display: flex; align-items: center; gap: 10px; justify-self: end; }
 .navbar-user {
   display: flex; align-items: center; gap: 9px; padding: 4px 10px 4px 4px;
   border-radius: 100px; border: 1px solid var(--border);
 }
 .navbar-user:hover { border-color: var(--border-light); }
 
-/* ─── Поиск энергетиков по центру шапки ─── */
-.navbar-search-wrap { display: flex; }
-.navbar-search-toggle { display: none; } /* показывается только на узких экранах — см. медиа-запрос */
+/* ─── Поиск энергетиков по центру шапки ───
+   Средняя grid-колонка сама по себе центрирована (см. .navbar); min-width: 0 разрешает полю
+   сжиматься на средних ширинах вместо резкого схлопывания в иконку. */
+.navbar-search-wrap { display: flex; justify-content: center; min-width: 0; }
+/* button.navbar-search-toggle — специфичность выше, чем у .btn-icon (display: inline-flex),
+   иначе тот применённый позже по файлу правило побеждает и кнопку видно всегда. */
+button.navbar-search-toggle { display: none; } /* показывается только на узких экранах — см. медиа-запрос */
 
 .navbar-search {
-  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  position: relative;
   display: flex; align-items: center; gap: 8px;
-  width: clamp(220px, 32vw, 420px); padding: 8px 12px;
+  width: 100%; max-width: 420px; min-width: 0; padding: 8px 12px;
   background: var(--surface-2); border: 1px solid var(--border); border-radius: 100px;
   transition: border-color 0.15s;
 }
@@ -170,6 +179,12 @@ a { color: inherit; text-decoration: none; }
   color: var(--text); font-family: var(--font); font-size: 14px;
 }
 .navbar-search-input::placeholder { color: var(--text-faint); }
+/* type="search" убирает автозаполнение логина/пароля браузером, но добавляет нативный крестик —
+   он дублирует наш .navbar-search-clear, поэтому глушим декорации поля. */
+.navbar-search-input::-webkit-search-decoration,
+.navbar-search-input::-webkit-search-cancel-button,
+.navbar-search-input::-webkit-search-results-button,
+.navbar-search-input::-webkit-search-results-decoration { -webkit-appearance: none; appearance: none; }
 .navbar-search-clear {
   flex-shrink: 0; display: flex; align-items: center; justify-content: center;
   width: 18px; height: 18px; border-radius: 50%; border: none;
@@ -203,12 +218,13 @@ a { color: inherit; text-decoration: none; }
 .navbar-search-item-rating { flex-shrink: 0; font-size: 13px; font-weight: 800; color: var(--gold); }
 
 /* Узкие экраны: центрированный поиск не помещается рядом с действиями — прячем за иконку,
-   разворачивающую панель поиска под шапкой во всю ширину. */
-@media (max-width: 900px) {
-  .navbar-search-toggle { display: inline-flex; }
+   разворачивающую панель поиска под шапкой во всю ширину. Порог совпадает с общим мобильным
+   брейкпоинтом ниже (там же прячутся остальные кнопки шапки). */
+@media (max-width: 640px) {
+  button.navbar-search-toggle { display: inline-flex; }
   .navbar-search:not(.mobile-open) { display: none; }
   .navbar-search.mobile-open {
-    position: absolute; top: calc(100% + 1px); left: 0; right: 0; transform: none;
+    position: absolute; top: calc(100% + 1px); left: 0; right: 0;
     width: auto; max-width: none; margin: 0; padding: 10px 13px;
     border-radius: 0; border-left: none; border-right: none; border-top: none;
     background: var(--surface); box-shadow: var(--shadow-lg); z-index: 140;

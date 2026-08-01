@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { isAuthenticated, removeToken } from "../services/api";
 import { useChat } from "../ChatContext";
 import Avatar from "./Avatar";
@@ -26,6 +26,25 @@ export default function Navbar() {
   // профиль берём из ChatContext (грузится один раз в корне) — без мигания «Профиль» при смене страниц
   const me = chat?.me;
 
+  // Лого и блок действий почти никогда не равны по ширине (например «Войти/Регистрация»
+  // против длинного имени профиля) — чтобы поиск в центре шапки был ровно по центру экрана,
+  // а не по центру остатка места, обе колонки принудительно делаем шире из них.
+  const logoRef = useRef(null);
+  const actionsRef = useRef(null);
+  const [sideW, setSideW] = useState(0);
+
+  useLayoutEffect(() => {
+    const logoEl = logoRef.current;
+    const actionsEl = actionsRef.current;
+    if (!logoEl || !actionsEl) return;
+    const measure = () => setSideW(Math.max(logoEl.offsetWidth, actionsEl.offsetWidth));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(logoEl);
+    ro.observe(actionsEl);
+    return () => ro.disconnect();
+  }, []);
+
   const handleLogout = () => {
     removeToken();
     navigate("/login");
@@ -36,15 +55,15 @@ export default function Navbar() {
   const isAdmin = me?.role === "ADMIN";
 
   return (
-    <nav className="navbar">
-      <Link className="navbar-logo" to="/" onClick={() => setMenuOpen(false)}>
+    <nav className="navbar" style={sideW ? { "--nav-side": `${sideW}px` } : undefined}>
+      <Link className="navbar-logo" to="/" onClick={() => setMenuOpen(false)} ref={logoRef}>
         <Bolt />
         <BrandText />
       </Link>
 
       <DrinkSearch />
 
-      <div className="navbar-actions">
+      <div className="navbar-actions" ref={actionsRef}>
         {isAdmin && (
           <Link className="btn btn-ghost btn-sm navbar-collapsible" to="/admin">Админка</Link>
         )}
