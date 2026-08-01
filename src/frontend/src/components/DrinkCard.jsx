@@ -49,7 +49,7 @@ export default function DrinkCard({ drink, rank, onClick, ratingOpen, onRatingTo
   const rankClass = rank === 1 ? "top1" : rank === 2 ? "top2" : rank === 3 ? "top3" : "";
 
   return (
-    <div className={`drink-card ${rankClass} ${ratingOpen ? "info-open" : ""}`} onClick={onClick}>
+    <div id={`drink-${drink.id}`} className={`drink-card ${rankClass} ${ratingOpen ? "info-open" : ""}`} onClick={onClick}>
       <div className={`drink-rank ${rankClass}`}>{RANK_LABELS[rank] || rank}</div>
 
 

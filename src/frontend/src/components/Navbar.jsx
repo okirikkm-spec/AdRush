@@ -5,6 +5,7 @@ import { useChat } from "../ChatContext";
 import Avatar from "./Avatar";
 import BrandText from "./BrandText";
 import ThemePicker from "./ThemePicker";
+import DrinkSearch from "./DrinkSearch";
 
 function Bolt() {
   return (
@@ -40,6 +41,8 @@ export default function Navbar() {
         <Bolt />
         <BrandText />
       </Link>
+
+      <DrinkSearch />
 
       <div className="navbar-actions">
         {isAdmin && (

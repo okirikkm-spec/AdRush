@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import DrinkCard from "../components/DrinkCard";
@@ -33,6 +33,27 @@ export default function MainPage() {
 
   // открыть модалку по deep-link /drink/:id
   useEffect(() => { setOpenId(id ? Number(id) : null); }, [id]);
+
+  // прокрутка и подсветка карточки, на которую перешли из поиска в шапке (?focus=id)
+  const focusId = searchParams.get("focus") ? Number(searchParams.get("focus")) : null;
+  const scrolledToFocus = useRef(null);
+  useEffect(() => {
+    if (!focusId || drinks.length === 0 || scrolledToFocus.current === focusId) return;
+    const target = drinks.find((d) => d.id === focusId);
+    if (!target) return;
+    // карточка скрыта текущим фильтром брендов — сбрасываем его, чтобы её было видно
+    if (brandFilter && target.brand && !brandFilter.has(target.brand)) {
+      setBrandFilter(null);
+      return;
+    }
+    const el = document.getElementById(`drink-${focusId}`);
+    if (!el) return;
+    scrolledToFocus.current = focusId;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("drink-flash");
+    const t = setTimeout(() => el.classList.remove("drink-flash"), 2300);
+    return () => clearTimeout(t);
+  }, [focusId, drinks, brandFilter]);
 
   const closeModal = () => {
     setOpenId(null);
