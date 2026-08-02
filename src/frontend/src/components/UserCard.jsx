@@ -7,9 +7,10 @@ import { useChat } from "../ChatContext";
 import { fetchUserCard, isAuthenticated, mediaUrl } from "../services/api";
 import { LockIcon, MailIcon, TrophyIcon, UserIcon } from "./icons";
 
-const CARD_W = 320;   // ширина карточки
 const GAP = 8;        // отступ от строки, по которой кликнули
-const EDGE = 12;      // минимальный зазор до краёв экрана
+// Минимальный зазор до краёв экрана. Ширину карточки задаёт CSS (.user-card-pos),
+// здесь тот же зазор используется для вертикали — держать значения согласованными.
+const EDGE = 12;
 
 /**
  * Всплывающий мини-профиль автора отзыва: обложка с тем же кадром, что на странице
@@ -26,9 +27,9 @@ export default function UserCard({ userId, anchor, self = false, onClose }) {
   const navigate = useNavigate();
   const chat = useChat();
   const boxRef = useRef(null);
+  const frameRef = useRef(0);
   const [card, setCard] = useState(null);
   const [error, setError] = useState(null);
-  const [pos, setPos] = useState(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -41,35 +42,48 @@ export default function UserCard({ userId, anchor, self = false, onClose }) {
     return () => { alive = false; };
   }, [userId]);
 
-  /* Позиция: под строкой отзыва, а если снизу не помещается — над ней.
-     Пересчитывается после загрузки (высота меняется) и при прокрутке. */
+  /**
+   * Позиция: под строкой отзыва, а если снизу не помещается — над ней.
+   * Пишем прямо в style.transform, а не через состояние: при прокрутке это
+   * событие на каждый кадр, и перерисовка компонента (плюс пересчёт left/top)
+   * заметно отставала от содержимого — карточка ехала рывками.
+   */
   const place = useCallback(() => {
+    const el = boxRef.current;
     const a = anchor?.getBoundingClientRect();
-    if (!a) return;
+    if (!el || !a) return;
     const vh = window.innerHeight;
     // строку отзыва увели прокруткой за экран — карточке не к чему прижиматься
     if (a.bottom < 0 || a.top > vh) { onClose(); return; }
 
-    const h = boxRef.current?.offsetHeight || 0;
+    const h = el.offsetHeight;
     const vw = window.innerWidth;
-    const width = Math.min(CARD_W, vw - 2 * EDGE);
+    const width = el.offsetWidth;
     const left = Math.min(Math.max(EDGE, a.left), vw - width - EDGE);
     const below = a.bottom + GAP;
     const above = a.top - GAP - h;
     // выбранную сторону всё равно вгоняем в экран: у нижних отзывов места нет ни там, ни там
     const preferred = below + h > vh - EDGE ? above : below;
     const top = Math.max(EDGE, Math.min(preferred, vh - h - EDGE));
-    setPos({ left, top, width });
+    // округляем до целых пикселей: дробные координаты дают дрожание текста
+    el.style.transform = `translate3d(${Math.round(left)}px, ${Math.round(top)}px, 0)`;
+    el.style.visibility = "visible";
   }, [anchor, onClose]);
 
   useLayoutEffect(() => {
     place();
-    // capture: ловим прокрутку внутренних контейнеров (тело модалки), а не только окна
-    window.addEventListener("scroll", place, true);
-    window.addEventListener("resize", place);
+    /* Скролл сыплется чаще кадра — сводим к одному пересчёту на кадр.
+       capture: ловим прокрутку внутренних контейнеров (тело модалки), а не только окна. */
+    const onScroll = () => {
+      if (frameRef.current) return;
+      frameRef.current = requestAnimationFrame(() => { frameRef.current = 0; place(); });
+    };
+    window.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    window.addEventListener("resize", onScroll, { passive: true });
     return () => {
-      window.removeEventListener("scroll", place, true);
-      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onScroll);
+      if (frameRef.current) { cancelAnimationFrame(frameRef.current); frameRef.current = 0; }
     };
   }, [place, card, error]);
 
@@ -109,16 +123,17 @@ export default function UserCard({ userId, anchor, self = false, onClose }) {
   const stats = card?.stats;
 
   return createPortal(
+    /* Внешний слой только позиционирует (его transform двигает карточку), сама
+       карточка — внутри: её анимация появления тоже идёт через transform и
+       затирала бы позицию. */
     <div
-      className="user-card"
+      className="user-card-pos"
       ref={boxRef}
-      role="dialog"
-      aria-label="Профиль пользователя"
-      style={{ left: pos?.left ?? -9999, top: pos?.top ?? -9999, width: pos?.width ?? CARD_W }}
       // клик по карточке не должен закрывать окно карточки энергетика под ней
       onMouseDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
     >
+      <div className="user-card" role="dialog" aria-label="Профиль пользователя">
       {!card && !error && <div className="user-card-state">Загрузка…</div>}
       {error && <div className="user-card-state error-text">{error}</div>}
 
@@ -187,6 +202,7 @@ export default function UserCard({ userId, anchor, self = false, onClose }) {
           </div>
         </>
       )}
+      </div>
     </div>,
     document.body,
   );

@@ -820,15 +820,19 @@ a.mini-review-name:hover { color: var(--accent); }
 }
 .review-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .review-author { font-weight: 700; font-size: 14px; }
-/* Автор отзыва — кнопка (открывает мини-профиль), но выглядит как обычный текст/аватарка */
+/* Автор отзыва — кнопка (открывает мини-профиль), но выглядит как обычный текст/аватарка.
+   Шрифт наследуем по частям: шорткат font: inherit сбрасывал бы и жирность имени. */
 .review-author-btn {
   display: inline-flex; align-items: center; padding: 0; border: none; background: none;
-  font: inherit; color: inherit; text-align: left; cursor: pointer;
+  font-family: inherit; font-size: inherit; color: inherit; text-align: left; cursor: pointer;
   min-width: 0;
 }
 /* Длинное имя ужимается многоточием и остаётся одной строкой: иначе оценка, дата
    и «⋮» уезжают под него (полное имя видно в мини-профиле по клику). */
-button.review-author { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+button.review-author {
+  display: block; font-weight: 700; font-size: 14px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 button.review-author:hover { color: var(--accent); }
 .review-date { color: var(--text-faint); font-size: 12px; margin-left: auto; }
 .review-rating { color: var(--gold); font-weight: 700; font-size: 13px; }
@@ -887,8 +891,21 @@ button.review-author:hover { color: var(--accent); }
 /* ─────────────── Мини-профиль автора отзыва ───────────────
    Всплывает у шапки отзыва; позиция (fixed) проставляется из UserCard.
    z-index выше окна карточки энергетика (200) и окна «Поделиться» (300). */
+/* Позиционирующий слой: положение задаётся transform из UserCard (так карточка
+   успевает за прокруткой), ширина — здесь, чтобы JS её не считал.
+   Спрятан до первого замера: иначе кадр мелькнёт в левом верхнем углу. */
+.user-card-pos {
+  position: fixed; left: 0; top: 0; z-index: 400;
+  width: min(320px, 100vw - 24px);
+  visibility: hidden; will-change: transform;
+}
+/* На телефоне карточка занимает всю ширину с равными полями: при фиксированных
+   320px она равнялась по левому краю строки отзыва (тот сдвинут на аватарку) и
+   выглядела съехавшей вправо. Горизонталь дальше сама упирается в EDGE=12px. */
+@media (max-width: 520px) {
+  .user-card-pos { width: calc(100vw - 24px); }
+}
 .user-card {
-  position: fixed; z-index: 400;
   background: var(--surface); border: 1px solid var(--border-light);
   border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
   /* на низком экране карточка выше него — прокручиваем её саму, а не выпускаем за край */
