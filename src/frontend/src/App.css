@@ -17,11 +17,15 @@
   --accent-dim:   color-mix(in srgb, var(--accent) 14%, transparent);
   --accent-2:     color-mix(in srgb, var(--accent) 52%, #fff); /* светлый край акцентных градиентов (логотип) */
 
+  /* Медали топ-3 и цвет оценок. Выводятся из фона там же, где остальная палитра: на светлой
+     теме золото затемняется до тёмно-янтарного, иначе главное число на карточке не читается. */
   --gold:         #ffb02e;
+  --silver:       #c9c9d6;
+  --bronze:       #d98a4f;
 
   --text:         #ececf2;
   --text-muted:   #8a8aa0;
-  --text-faint:   #54546a;
+  --text-faint:   #6f6f86;
 
   --success:      #29c466;
   --error:        #ff5a52;
@@ -411,6 +415,9 @@ textarea.input { resize: vertical; min-height: 84px; line-height: 1.5; }
 .drink-card {
   --card-pad: 14px;
   position: relative;
+  /* Общий минимум высоты. Сетка выравнивает ряды только внутри себя, а списков на странице
+     два — рейтинг и остаток каталога; без этого блоки в них были бы разной высоты. */
+  min-height: 164px;
   display: flex; align-items: center; gap: 18px; padding: var(--card-pad);
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius-lg); cursor: pointer;
@@ -420,32 +427,34 @@ textarea.input { resize: vertical; min-height: 84px; line-height: 1.5; }
 .drink-card:hover, .drink-card.info-open { z-index: 30; }
 .drink-card:hover { transform: translateY(-2px); border-color: var(--border-light); box-shadow: var(--shadow); }
 .drink-rank {
+  /* --text-muted, а не --text-faint: номер места — это содержимое, а не подпись,
+     и на светлых темах «4, 5, 6…» самым бледным оттенком просто пропадали */
   flex-shrink: 0; min-width: 48px; text-align: center;
-  font-size: 19px; font-weight: 800; color: var(--text-faint);
+  font-size: 19px; font-weight: 800; color: var(--text-muted);
   letter-spacing: -0.5px;
 }
-.drink-rank.top1 { color: var(--gold); text-shadow: 0 0 14px rgba(255, 176, 46, 0.5); }
-.drink-rank.top2 { color: #c9c9d6; text-shadow: 0 0 14px rgba(201, 201, 214, 0.45); }
-.drink-rank.top3 { color: #d98a4f; text-shadow: 0 0 14px rgba(217, 138, 79, 0.45); }
+.drink-rank.top1 { color: var(--gold); text-shadow: 0 0 14px color-mix(in srgb, var(--gold) 45%, transparent); }
+.drink-rank.top2 { color: var(--silver); text-shadow: 0 0 14px color-mix(in srgb, var(--silver) 40%, transparent); }
+.drink-rank.top3 { color: var(--bronze); text-shadow: 0 0 14px color-mix(in srgb, var(--bronze) 40%, transparent); }
 
 /* ─── Медальное оформление топ-3 карточек ─── */
 .drink-card.top1 {
-  border-color: rgba(255, 176, 46, 0.55);
-  background: linear-gradient(100deg, rgba(255, 176, 46, 0.14), var(--surface) 58%);
+  border-color: color-mix(in srgb, var(--gold) 55%, transparent);
+  background: linear-gradient(100deg, color-mix(in srgb, var(--gold) 14%, transparent), var(--surface) 58%);
 }
-.drink-card.top1:hover { border-color: var(--gold); box-shadow: 0 6px 30px rgba(255, 176, 46, 0.28); }
+.drink-card.top1:hover { border-color: var(--gold); box-shadow: 0 6px 30px color-mix(in srgb, var(--gold) 28%, transparent); }
 
 .drink-card.top2 {
-  border-color: rgba(201, 201, 214, 0.5);
-  background: linear-gradient(100deg, rgba(201, 201, 214, 0.14), var(--surface) 58%);
+  border-color: color-mix(in srgb, var(--silver) 50%, transparent);
+  background: linear-gradient(100deg, color-mix(in srgb, var(--silver) 14%, transparent), var(--surface) 58%);
 }
-.drink-card.top2:hover { border-color: #c9c9d6; box-shadow: 0 6px 30px rgba(201, 201, 214, 0.24); }
+.drink-card.top2:hover { border-color: var(--silver); box-shadow: 0 6px 30px color-mix(in srgb, var(--silver) 24%, transparent); }
 
 .drink-card.top3 {
-  border-color: rgba(217, 138, 79, 0.5);
-  background: linear-gradient(100deg, rgba(217, 138, 79, 0.14), var(--surface) 58%);
+  border-color: color-mix(in srgb, var(--bronze) 50%, transparent);
+  background: linear-gradient(100deg, color-mix(in srgb, var(--bronze) 14%, transparent), var(--surface) 58%);
 }
-.drink-card.top3:hover { border-color: #d98a4f; box-shadow: 0 6px 30px rgba(217, 138, 79, 0.26); }
+.drink-card.top3:hover { border-color: var(--bronze); box-shadow: 0 6px 30px color-mix(in srgb, var(--bronze) 26%, transparent); }
 
 /* подсветка карточки, на которую перешли из поиска в шапке */
 .drink-flash { animation: drinkFlash 2.3s ease; }
@@ -463,7 +472,11 @@ textarea.input { resize: vertical; min-height: 84px; line-height: 1.5; }
   color: var(--text-faint); font-size: 26px;
 }
 .drink-card-body { flex: 1; min-width: 0; }
-.drink-card-name { font-size: 17px; font-weight: 700; margin-bottom: 5px; }
+/* максимум две строки: без ограничения одно длинное название задирает высоту всего ряда */
+.drink-card-name {
+  font-size: 17px; font-weight: 700; margin-bottom: 5px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
 .drink-card-brand {
   display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.4px; color: var(--accent); background: var(--accent-dim);
@@ -1882,3 +1895,158 @@ button.review-author:hover { color: var(--accent); }
 @media (prefers-reduced-motion: reduce) {
   .chat-msg { animation: none; }
 }
+
+/* ─────────────── Каталог: плотность, сортировка, остаток списка ─────────────── */
+
+/* Главная шире прочих страниц: 98 позиций в колонке 880px не окинуть взглядом */
+.page-wide { max-width: 1240px; }
+
+.page-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+.sort-control { display: inline-flex; align-items: center; gap: 8px; }
+.sort-label {
+  font-size: 12px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .5px; color: var(--text-muted);
+}
+.sort-select {
+  /* Высота ровно как у кнопки «Фильтр» рядом. Задаётся явно, а не отступами: у select
+     своя минимальная высота строки, и одним line-height её не пересилить. */
+  appearance: none; height: 32px; padding: 0 30px 0 13px;
+  font: inherit; font-size: 13px; font-weight: 600;
+  color: var(--text); background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); cursor: pointer;
+  /* стрелка нарисована фоном: нативная у select не поддаётся стилизации в разных браузерах */
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+                    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: right 14px center, right 9px center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+.sort-select:hover { border-color: var(--border-light); }
+.sort-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* на узких экранах .btn-sm мельчает — держим select вровень с кнопкой фильтра */
+@media (max-width: 640px) {
+  .sort-select { height: 31px; font-size: 12.5px; }
+}
+
+/* Характеристики прямо в карточке списка — по ним энергетики и выбирают */
+.drink-card-specs {
+  font-size: 12.5px; font-weight: 600; color: var(--text-muted); margin-bottom: 5px;
+}
+
+/* Хвост каталога: карточки без единой оценки прячутся под кнопку */
+.catalog-rest { margin-top: 26px; }
+.catalog-rest-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+  padding: 16px 18px; background: var(--surface); border: 1px dashed var(--border-light);
+  border-radius: var(--radius-lg);
+}
+.catalog-rest-title { font-size: 16px; font-weight: 700; }
+.catalog-rest-hint { font-size: 13px; color: var(--text-muted); margin-top: 3px; }
+
+@media (min-width: 1200px) {
+  /* две колонки: сравнивать соседние позиции глазами становится возможно */
+  .drink-list {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    /* 1fr, а не auto: иначе высота карточки зависит от длины названия и описания,
+       и ряд получается ступенькой. Так все ряды равны самому высокому. */
+    grid-auto-rows: 1fr;
+  }
+  /* топ-3 остаются подиумом во всю ширину */
+  .drink-card.top1, .drink-card.top2, .drink-card.top3 { grid-column: 1 / -1; }
+}
+
+/* ─────────────── Страница напитка: распределение, характеристики, соседи ─────────────── */
+
+.drink-page-dist {
+  margin: 14px 0 4px; padding: 14px; background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: var(--radius);
+}
+
+.spec-table {
+  margin: 16px 0 4px; border: 1px solid var(--border); border-radius: var(--radius);
+  overflow: hidden;
+}
+.spec-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 14px;
+  padding: 10px 14px; font-size: 14px;
+}
+.spec-row + .spec-row { border-top: 1px solid var(--border); }
+.spec-row-label { color: var(--text-muted); }
+.spec-row-value { font-weight: 700; text-align: right; }
+/* пересчёт на банку — второй строкой, помельче: главное число всё-таки «на 100 мл» */
+.spec-row-hint { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); }
+
+.spec-ingredients { margin-top: 14px; font-size: 13.5px; color: var(--text-muted); }
+.spec-ingredients summary {
+  cursor: pointer; font-weight: 700; color: var(--text); list-style: none;
+}
+.spec-ingredients summary::before { content: "▸ "; color: var(--text-muted); }
+.spec-ingredients[open] summary::before { content: "▾ "; }
+.spec-ingredients p { margin-top: 8px; line-height: 1.55; }
+
+.related-block { margin-top: 22px; }
+.related-title {
+  font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
+  color: var(--text-muted); margin-bottom: 10px;
+}
+.related-list { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+.related-chip {
+  flex: 0 0 auto; width: 132px; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 10px; background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius); cursor: pointer; color: inherit; font: inherit; text-align: center;
+  transition: border-color .15s, transform .12s;
+}
+.related-chip:hover { border-color: var(--border-light); transform: translateY(-2px); }
+.related-chip img { width: 54px; height: 54px; object-fit: contain; }
+.related-chip-name {
+  font-size: 12px; font-weight: 600; line-height: 1.3;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.related-chip-rating { font-size: 13px; font-weight: 800; color: var(--gold); }
+
+/* Форма характеристик (режим правки у админа) */
+.spec-form {
+  margin-bottom: 16px; padding: 14px; background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: var(--radius);
+}
+.spec-form-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 10px 0;
+}
+.spec-field { display: flex; flex-direction: column; gap: 5px; }
+.spec-field > span { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+
+/* Предупреждение о нерусском описании в приёмке */
+.staging-desc-warn {
+  font-size: 12px; line-height: 1.4; color: var(--warn, #e0a03a); margin-top: 4px;
+}
+
+/* ─────────────── Футер ─────────────── */
+
+.site-footer {
+  margin-top: 60px; padding: 34px 20px 20px;
+  background: var(--surface); border-top: 1px solid var(--border);
+}
+.site-footer-inner {
+  max-width: 1240px; margin: 0 auto;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 28px;
+}
+.site-footer-logo {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 17px; font-weight: 800; letter-spacing: -0.3px;
+}
+.site-footer-logo svg { color: var(--accent); }
+.site-footer-tagline { margin-top: 8px; font-size: 13px; color: var(--text-muted); max-width: 34ch; }
+.site-footer-nav { display: flex; flex-direction: column; gap: 7px; align-items: flex-start; }
+.site-footer-nav a { font-size: 13.5px; color: var(--text-muted); }
+.site-footer-nav a:hover { color: var(--text); }
+.site-footer-nav-title {
+  font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
+  color: var(--text-faint); margin-bottom: 3px;
+}
+.site-footer-about p { margin-top: 7px; font-size: 13px; line-height: 1.55; color: var(--text-muted); }
+.site-footer-bottom {
+  max-width: 1240px; margin: 26px auto 0; padding-top: 16px;
+  border-top: 1px solid var(--border); font-size: 12px; color: var(--text-faint);
+}
+.section-head .section-title { margin-bottom: 0; }

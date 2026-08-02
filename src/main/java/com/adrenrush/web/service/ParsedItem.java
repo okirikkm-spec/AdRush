@@ -12,7 +12,14 @@ package com.adrenrush.web.service;
  *                    при принятии позиции
  * @param sourceUrl   ссылка на страницу товара — ключ, по которому позиция узнаётся между проходами
  * @param source      метка парсера, например «Monster (WorldSweet)»
+ * @param volumeMl    объём банки в мл, если источник его называет, иначе null
  */
 public record ParsedItem(String name, String description, String brand,
-                         String imageUrl, String sourceUrl, String source) {
+                         String imageUrl, String sourceUrl, String source, Integer volumeMl) {
+
+    /** Позиция без объёма: большинство источников не публикует его отдельным полем. */
+    public ParsedItem(String name, String description, String brand,
+                      String imageUrl, String sourceUrl, String source) {
+        this(name, description, brand, imageUrl, sourceUrl, source, null);
+    }
 }

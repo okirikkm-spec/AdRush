@@ -172,7 +172,9 @@ public class WorldSweetParserService implements CatalogParser {
                 chosen.size(), candidates.size(), candidates.size() - chosen.size());
 
             return chosen.stream()
-                .map(c -> new ParsedItem(c.name(), c.description(), c.brand(), c.imageUrl(), c.sourceUrl(), SOURCE))
+                // объём уже посчитан для схлопывания дублей — заодно сохраняем его в карточку
+                .map(c -> new ParsedItem(c.name(), c.description(), c.brand(), c.imageUrl(), c.sourceUrl(), SOURCE,
+                    c.volumeMl() > 0 ? c.volumeMl() : null))
                 .toList();
         } catch (Exception e) {
             log.warn("WorldSweet-парсер: ошибка обхода {}: {}", catalogUrl, e.getMessage());

@@ -44,6 +44,9 @@ public class ParsedCandidate {
     @Column(length = 1024)
     private String imageUrl;
 
+    /** Объём банки в мл, если источник его называет, — переезжает в карточку при принятии. */
+    private Integer volumeMl;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)
     private CandidateStatus status = CandidateStatus.PENDING;

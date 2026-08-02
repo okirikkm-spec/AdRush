@@ -33,6 +33,13 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
     @Query("SELECT AVG(r.rating) FROM Review r WHERE r.drink.id = :drinkId")
     Double getAverageByDrinkId(@Param("drinkId") Long drinkId);
 
+    /**
+     * Средняя оценка по всему сайту (null — отзывов нет вообще). Точка отсчёта для байесовского
+     * сглаживания: к ней притягивается рейтинг напитков, у которых оценок ещё мало.
+     */
+    @Query("SELECT AVG(r.rating) FROM Review r")
+    Double getGlobalAverage();
+
     /** Средняя оценка, которую ставит сам пользователь (null — отзывов нет). */
     @Query("SELECT AVG(r.rating) FROM Review r WHERE r.user.id = :userId")
     Double getAverageByUserId(@Param("userId") Long userId);

@@ -50,7 +50,7 @@ public class ParserStagingService {
     /** Позиция приёмки для админки: та же карточка-кандидат плюс подсказка о похожем напитке. */
     public record CandidateView(Long id, String name, String brand, String description,
                                 String imageUrl, String sourceUrl, String source,
-                                String similarTo, String status) {}
+                                String similarTo, String status, Integer volumeMl) {}
 
     /** Что администратор решил по одной позиции: принять (возможно, с правками) или отклонить. */
     public record ApplyItem(Long id, String name, String description) {}
@@ -122,6 +122,7 @@ public class ParserStagingService {
                     // название/описание могли поправить руками при принятии — их не перетираем,
                     // пока позиция ждёт решения; обновляем только источниковые данные
                     existing.setImageUrl(item.imageUrl());
+                    existing.setVolumeMl(item.volumeMl());
                     existing.setSimilarTo(twin != null ? twin.name() : null);
                     existing.setSource(item.source());
                     existing.setLastSeenAt(Instant.now());
@@ -138,7 +139,8 @@ public class ParserStagingService {
     public List<CandidateView> list(CandidateStatus status) {
         return candidateRepository.findByStatusOrderBySimilarToAscNameAsc(status).stream()
             .map(c -> new CandidateView(c.getId(), c.getName(), c.getBrand(), c.getDescription(),
-                c.getImageUrl(), c.getSourceUrl(), c.getSource(), c.getSimilarTo(), c.getStatus().name()))
+                c.getImageUrl(), c.getSourceUrl(), c.getSource(), c.getSimilarTo(), c.getStatus().name(),
+                c.getVolumeMl()))
             .toList();
     }
 
@@ -157,11 +159,10 @@ public class ParserStagingService {
             if (candidate == null) continue;
 
             String name = item.name() != null && !item.name().isBlank() ? item.name().trim() : candidate.getName();
-            String description = item.description() != null && !item.description().isBlank()
-                ? item.description().trim() : candidate.getDescription();
+            String description = descriptionFor(item, candidate);
             try {
                 drinkService.upsertFromParser(name, description, candidate.getBrand(),
-                    candidate.getImageUrl(), candidate.getSourceUrl(), true, false);
+                    candidate.getImageUrl(), candidate.getSourceUrl(), candidate.getVolumeMl(), true, false);
                 candidateRepository.delete(candidate);
                 created++;
                 log.info("Приёмка: принят энергетик «{}» ({})", name, candidate.getSourceUrl());
@@ -213,11 +214,31 @@ public class ParserStagingService {
         return counts;
     }
 
+    /**
+     * Какое описание получит новая карточка.
+     *
+     * Магазины подставляют один и тот же английский текст про бренд сразу всем вкусам («Zero sugar,
+     * flavor unleashed…» стоял у 18 карточек) — на русском сайте он ничего не объясняет, и в каталог
+     * такой текст не пускаем: лучше без описания, чем с чужим. Но проверка касается только текста
+     * источника: если администратор в окне приёмки написал своё, оно сохраняется как есть.
+     */
+    private String descriptionFor(ApplyItem item, ParsedCandidate candidate) {
+        String parsed = blankToNull(candidate.getDescription());
+        String edited = blankToNull(item.description());
+        if (edited == null || edited.equals(parsed)) return DrinkService.looksRussian(parsed) ? parsed : null;
+        return edited;
+    }
+
+    private String blankToNull(String s) {
+        return (s == null || s.isBlank()) ? null : s.trim();
+    }
+
     private void fill(ParsedCandidate candidate, ParsedItem item, DrinkService.ExistingDrink twin) {
         candidate.setName(item.name());
         candidate.setBrand(item.brand());
         candidate.setDescription(item.description());
         candidate.setImageUrl(item.imageUrl());
+        candidate.setVolumeMl(item.volumeMl());
         candidate.setSource(item.source());
         candidate.setSimilarTo(twin != null ? twin.name() : null);
         candidate.setStatus(CandidateStatus.PENDING);

@@ -54,16 +54,44 @@ public class DrinkService {
     @Value("${media.remove-white-background:true}")
     private boolean removeWhiteBackground;
 
-    /** Список всех энергетиков, отсортированный по средней оценке (по убыванию). */
+    /**
+     * Вес априорного мнения в байесовском рейтинге: столько условных оценок «по среднему сайта»
+     * подмешивается к каждому напитку. При 5 одиночный отзыв уже не выносит банку в топ, но и не
+     * хоронит её — восьми-девяти реальных оценок хватает, чтобы карточка встала на своё место.
+     */
+    private static final double RATING_PRIOR_WEIGHT = 5.0;
+
+    /** Средняя оценка по сайту, когда отзывов нет вообще, — середина десятибалльной шкалы. */
+    private static final double RATING_FALLBACK_MEAN = 5.5;
+
+    /** Список всех энергетиков, отсортированный по байесовскому рейтингу (по убыванию). */
     @Transactional(readOnly = true)
     public List<DrinkResponseDto> listAllSortedByRating() {
+        double mean = globalAverageRating();
         return drinkRepository.findAll().stream()
             .map(this::toSummary)
             .sorted(Comparator
-                .comparingDouble(DrinkResponseDto::getAverageRating).reversed()
+                .comparingDouble((DrinkResponseDto d) -> bayesianRating(d.getAverageRating(), d.getReviewCount(), mean))
+                .reversed()
                 .thenComparing(Comparator.comparingInt(DrinkResponseDto::getReviewCount).reversed())
                 .thenComparing(DrinkResponseDto::getName, Comparator.nullsLast(String::compareTo)))
             .toList();
+    }
+
+    /**
+     * Байесовское сглаживание: {@code (C·m + Σоценок) / (C + n)}, где m — средняя оценка по сайту,
+     * C — {@link #RATING_PRIOR_WEIGHT}. Голое среднее ставило вровень «8.5 по двум отзывам» и
+     * «8.5 по двадцати»: одного человека хватало, чтобы занести любую банку в первую десятку.
+     * На карточке при этом показывается настоящее среднее — сглаживание влияет только на порядок.
+     */
+    private double bayesianRating(double average, int count, double mean) {
+        if (count <= 0) return 0.0;
+        return (RATING_PRIOR_WEIGHT * mean + average * count) / (RATING_PRIOR_WEIGHT + count);
+    }
+
+    private double globalAverageRating() {
+        Double mean = reviewRepository.getGlobalAverage();
+        return mean != null ? mean : RATING_FALLBACK_MEAN;
     }
 
     @Transactional(readOnly = true)
@@ -100,6 +128,7 @@ public class DrinkService {
      * Заводит или обновляет энергетик из спарсенной записи. Дедупликация — по {@code sourceUrl}.
      *
      * @param brand         бренд (источник парсинга), проставляется и при создании, и при обновлении
+     * @param volumeMl      объём банки из источника (null — не известен)
      * @param downloadCover true — скачать обложку в наше хранилище; false — сохранить внешнюю ссылку
      *                      как есть (для CDN, тротлящих серверное скачивание, например Monster)
      * @param reparse       false — существующие записи пропускаются (только новые);
@@ -108,7 +137,8 @@ public class DrinkService {
      */
     @Transactional
     public ParseOutcome upsertFromParser(String name, String description, String brand, String coverUrl,
-                                         String sourceUrl, boolean downloadCover, boolean reparse) {
+                                         String sourceUrl, Integer volumeMl,
+                                         boolean downloadCover, boolean reparse) {
         Drink existing = sourceUrl != null ? drinkRepository.findBySourceUrl(sourceUrl).orElse(null) : null;
         if (existing != null) {
             if (!reparse) return ParseOutcome.SKIPPED;
@@ -125,6 +155,11 @@ public class DrinkService {
                 existing.setBrand(brand);
                 changed = true;
             }
+            // объём проставляем только если он ещё не известен: руками введённое значение точнее
+            if (volumeMl != null && existing.getVolumeMl() == null) {
+                existing.setVolumeMl(volumeMl);
+                changed = true;
+            }
             if (changed) drinkRepository.save(existing);
             return changed ? ParseOutcome.UPDATED : ParseOutcome.SKIPPED;
         }
@@ -135,6 +170,7 @@ public class DrinkService {
         drink.setSlug(uniqueSlug(name.trim()));
         drink.setDescription(description);
         drink.setSourceUrl(sourceUrl);
+        drink.setVolumeMl(volumeMl);
         drinkRepository.save(drink);
 
         if (coverUrl != null && !coverUrl.isBlank()) {
@@ -239,6 +275,82 @@ public class DrinkService {
         auditService.record(actor, AuditAction.DRINK_UPDATE, AuditTargetType.DRINK, drink.getId(), drink.getName(),
             "Настроено кадрирование обложки");
         return getById(id);
+    }
+
+    /** Характеристики банки (объём, кофеин, сахар, калории, состав, страна) — для администратора. */
+    @Transactional
+    public DrinkResponseDto updateSpecs(User actor, Long id, Integer volumeMl, Double caffeinePer100Ml,
+                                        Double sugarPer100Ml, Double kcalPer100Ml,
+                                        String ingredients, String country) {
+        Drink drink = drinkRepository.findById(id)
+            .orElseThrow(() -> ApiException.notFound("Энергетик не найден"));
+        drink.setVolumeMl(volumeMl != null && volumeMl >= 1 && volumeMl <= 5000 ? volumeMl : null);
+        drink.setCaffeinePer100Ml(inRangeOrNull(caffeinePer100Ml, 0, 200));
+        drink.setSugarPer100Ml(inRangeOrNull(sugarPer100Ml, 0, 100));
+        drink.setKcalPer100Ml(inRangeOrNull(kcalPer100Ml, 0, 900));
+        drink.setIngredients(trimToNull(ingredients));
+        drink.setCountry(trimToNull(country));
+        drinkRepository.save(drink);
+
+        auditService.record(actor, AuditAction.DRINK_UPDATE, AuditTargetType.DRINK, drink.getId(), drink.getName(),
+            "Изменены характеристики карточки");
+        return getById(id);
+    }
+
+    /** Число из формы: вне разумного диапазона (опечатка в админке) — считаем «не заполнено». */
+    private Double inRangeOrNull(Double value, double min, double max) {
+        return (value == null || value < min || value > max) ? null : value;
+    }
+
+    private String trimToNull(String s) {
+        return (s == null || s.isBlank()) ? null : s.trim();
+    }
+
+    /** Сводка чистки описаний. */
+    public record DescriptionCleanupResult(int foreign, int duplicated, int kept) {}
+
+    /**
+     * Чистит описания, доставшиеся от парсеров (админ-операция):
+     *  1) без единой кириллической буквы — на русском сайте это англоязычная заглушка магазина;
+     *  2) слово в слово повторяющиеся у нескольких карточек — такой текст описывает бренд, а не
+     *     вкус (одно и то же «Zero sugar, flavor unleashed…» стояло у 18 разных банок).
+     * Чистится только описание: название, фото и оценки не трогаются, а нормальный текст админ
+     * пишет заново руками. Новые карточки в приёмке этих заглушек уже не получают.
+     */
+    @Transactional
+    public DescriptionCleanupResult cleanupDescriptions(User actor) {
+        List<Drink> all = drinkRepository.findAll();
+        Map<String, Integer> seen = new LinkedHashMap<>();
+        for (Drink d : all) {
+            String desc = trimToNull(d.getDescription());
+            if (desc != null) seen.merge(desc, 1, Integer::sum);
+        }
+
+        int foreign = 0, duplicated = 0, kept = 0;
+        for (Drink d : all) {
+            String desc = trimToNull(d.getDescription());
+            if (desc == null) continue;
+            if (!looksRussian(desc)) foreign++;
+            else if (seen.getOrDefault(desc, 0) > 1) duplicated++;
+            else { kept++; continue; }
+            d.setDescription(null);
+            drinkRepository.save(d);
+        }
+
+        auditService.record(actor, AuditAction.DRINK_UPDATE, AuditTargetType.DRINK, null, "Описания",
+            "Чистка описаний: убрано англоязычных " + foreign + ", дублей " + duplicated
+                + ", оставлено " + kept);
+        log.info("Чистка описаний: англоязычных {}, дублей {}, оставлено {}", foreign, duplicated, kept);
+        return new DescriptionCleanupResult(foreign, duplicated, kept);
+    }
+
+    /**
+     * Есть ли в тексте кириллица. Сайт русскоязычный, и описание из каталога-источника на
+     * английском («Real fruit juice, big flavor…») пользователю ничего не объясняет.
+     */
+    public static boolean looksRussian(String text) {
+        if (text == null) return false;
+        return text.codePoints().anyMatch(c -> Character.UnicodeBlock.of(c) == Character.UnicodeBlock.CYRILLIC);
     }
 
     /** Допускаем только два значения object-fit; иначе — null (значение по умолчанию на фронте). */
@@ -367,7 +479,7 @@ public class DrinkService {
             if (photo.getSource() == PhotoSource.PARSED && cutBackgroundInPlace(photo)) {
                 return PhotoOutcome.DEBACKGROUNDED;
             }
-            if (photo.getThumbUrl() == null || thumbnailLostTransparency(photo)) {
+            if (photo.getThumbUrl() == null || thumbnailLostTransparency(photo) || thumbnailOutdated(photo)) {
                 String key = storageKeyOf(url);
                 byte[] data = storageService.readBytes(url);
                 if (key == null || data == null) return PhotoOutcome.SKIPPED;
@@ -394,6 +506,21 @@ public class DrinkService {
         } catch (Exception e) {
             log.warn("optimizeMedia: фото {} ({}) — {}", photoId, url, e.getMessage());
             return PhotoOutcome.FAILED;
+        }
+    }
+
+    /**
+     * Превью собрано по старым настройкам: его длинная сторона больше нынешнего предела. Прежний
+     * предел (600 px) был крупнее самих пэкшотов, поэтому превью либо не создавалось совсем, либо
+     * весило почти как оригинал. Такие пересобираем при следующей оптимизации медиа.
+     */
+    private boolean thumbnailOutdated(DrinkPhoto photo) {
+        if (photo.getThumbUrl() == null) return false;
+        try {
+            return imageService.exceedsThumbSize(storageService.readBytes(photo.getThumbUrl()));
+        } catch (Exception e) {
+            log.debug("Не удалось сверить размер превью {}: {}", photo.getThumbUrl(), e.getMessage());
+            return false;
         }
     }
 

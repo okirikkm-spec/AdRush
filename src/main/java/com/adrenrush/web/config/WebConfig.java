@@ -18,5 +18,16 @@ public class WebConfig implements WebMvcConfigurer {
             .addResourceLocations("file:uploads/")
             .setCacheControl(CacheControl.maxAge(30, TimeUnit.DAYS).cachePublic())
             .resourceChain(true);
+
+        // Бандлы CRA: имя каждого файла содержит хеш содержимого (main.<hash>.js), поэтому
+        // «протухнуть» они не могут — кэшируем на год как immutable. Без этого обработчика
+        // на них попадал заголовок Spring Security по умолчанию (no-store), и полмегабайта
+        // статики скачивалось заново при каждом заходе.
+        // index.html сюда не попадает (он отдаётся обработчиком «/**») — и не должен: именно
+        // он ссылается на новые хеши после выката.
+        registry.addResourceHandler("/static/**")
+            .addResourceLocations("classpath:/static/static/")
+            .setCacheControl(CacheControl.maxAge(365, TimeUnit.DAYS).cachePublic().immutable())
+            .resourceChain(true);
     }
 }

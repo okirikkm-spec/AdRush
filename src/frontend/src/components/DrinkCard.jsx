@@ -1,22 +1,16 @@
 import { mediaUrl } from "../services/api";
 import { coverStyle } from "../utils/coverStyle";
+import { specSummary } from "../utils/specs";
+import RatingBars from "./RatingBars";
 import { BoltIcon } from "./icons";
 
-const SCORES = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
-
-// Первые три места получают тир-метки вместо номера
-const RANK_LABELS = { 1: "SSS", 2: "S", 3: "A" };
-
-function reviewWord(n) {
+export function reviewWord(n) {
   if (n % 10 === 1 && n % 100 !== 11) return "оценка";
   if ([2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100)) return "оценки";
   return "оценок";
 }
 
 function RatingPopup({ average, count, dist }) {
-  const values = SCORES.map((s) => dist?.[s] || 0);
-  const max = Math.max(1, ...values);
-
   return (
     <div className="rating-popup" onClick={(e) => e.stopPropagation()}>
       <div className="rating-popup-head">
@@ -26,33 +20,24 @@ function RatingPopup({ average, count, dist }) {
       {count === 0 ? (
         <div className="muted" style={{ fontSize: 12 }}>Пока никто не оценил</div>
       ) : (
-        <div className="rating-bars">
-          {SCORES.map((score) => {
-            const c = dist?.[score] || 0;
-            return (
-              <div className="rating-bar-row" key={score}>
-                <span className="rating-bar-label">{score}</span>
-                <span className="rating-bar-track">
-                  <span className="rating-bar-fill" style={{ width: `${(c / max) * 100}%` }} />
-                </span>
-                <span className="rating-bar-count">{c}</span>
-              </div>
-            );
-          })}
-        </div>
+        <RatingBars dist={dist} />
       )}
     </div>
   );
 }
 
-export default function DrinkCard({ drink, rank, onClick, ratingOpen, onRatingToggle, onRatingHover }) {
+export default function DrinkCard({ drink, rank, medals = true, onClick, ratingOpen, onRatingToggle, onRatingHover }) {
   const cover = mediaUrl(drink.coverUrl);
-  const rankClass = rank === 1 ? "top1" : rank === 2 ? "top2" : rank === 3 ? "top3" : "";
+  // медали — только у настоящего топа рейтинга: в сортировке «по алфавиту» первое место
+  // ничего не значит, и золотая рамка там врала бы
+  const rankClass = !medals ? "" : rank === 1 ? "top1" : rank === 2 ? "top2" : rank === 3 ? "top3" : "";
+  const count = drink.reviewCount || 0;
+  const specs = specSummary(drink);
 
   return (
     <div id={`drink-${drink.id}`} className={`drink-card ${rankClass} ${ratingOpen ? "info-open" : ""}`} onClick={onClick}>
-      <div className={`drink-rank ${rankClass}`}>{RANK_LABELS[rank] || rank}</div>
-
+      {/* у неоценённых карточек номера нет: они ничем не упорядочены между собой */}
+      <div className={`drink-rank ${rankClass}`}>{rank ?? ""}</div>
 
       {cover ? (
         <img className="drink-thumb" src={cover} alt={drink.name} loading="lazy" decoding="async"
@@ -64,6 +49,7 @@ export default function DrinkCard({ drink, rank, onClick, ratingOpen, onRatingTo
       <div className="drink-card-body">
         <div className="drink-card-name">{drink.name}</div>
         {drink.brand && <span className="drink-card-brand">{drink.brand}</span>}
+        {specs && <div className="drink-card-specs">{specs}</div>}
         {drink.description && <div className="drink-card-desc">{drink.description}</div>}
       </div>
 
@@ -78,12 +64,13 @@ export default function DrinkCard({ drink, rank, onClick, ratingOpen, onRatingTo
           <span className="rating-badge">
             {drink.averageRating > 0 ? drink.averageRating.toFixed(1) : "—"}
           </span>
+          {/* число оценок стоит рядом с баллом, а не только в попапе: без него «8.5» по двум
+              отзывам и «8.5» по двадцати выглядят одинаково, а на телефоне попапа вообще нет */}
+          <span className="rating-count">
+            {count > 0 ? `${count} ${reviewWord(count)}` : "нет оценок"}
+          </span>
           {ratingOpen && (
-            <RatingPopup
-              average={drink.averageRating}
-              count={drink.reviewCount || 0}
-              dist={drink.ratingDistribution}
-            />
+            <RatingPopup average={drink.averageRating} count={count} dist={drink.ratingDistribution} />
           )}
         </div>
       </div>

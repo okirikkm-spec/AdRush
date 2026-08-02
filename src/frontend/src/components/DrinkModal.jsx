@@ -1,12 +1,25 @@
-import { useEffect, useState, useCallback, useRef } from "react";
-import { fetchDrink, fetchMe, updateDrink, deleteDrink, isAuthenticated, mediaUrl } from "../services/api";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { fetchDrink, fetchMe, updateDrink, updateDrinkSpecs, deleteDrink, isAuthenticated, mediaUrl } from "../services/api";
 import { coverStyle } from "../utils/coverStyle";
+import { specRows } from "../utils/specs";
 import { useSwipeToClose } from "../hooks/useSwipeToClose";
 import PhotoGallery from "./PhotoGallery";
 import ReviewSection from "./ReviewSection";
+import RatingBars from "./RatingBars";
 import CoverFramerModal from "./CoverFramerModal";
 import ShareControl from "./ShareControl";
 import { BoltIcon, ImageIcon } from "./icons";
+
+/** Пустая строка вместо null — поля формы характеристик управляемые. */
+const specDraftOf = (drink) => ({
+  volumeMl: drink?.volumeMl ?? "",
+  caffeinePer100Ml: drink?.caffeinePer100Ml ?? "",
+  sugarPer100Ml: drink?.sugarPer100Ml ?? "",
+  kcalPer100Ml: drink?.kcalPer100Ml ?? "",
+  country: drink?.country ?? "",
+  ingredients: drink?.ingredients ?? "",
+});
 
 function ratingWord(n) {
   const a = n % 100, b = n % 10;
@@ -23,9 +36,11 @@ function ratingWord(n) {
  *
  * @param drinkId id энергетика (страница сама подтягивает полные данные)
  * @param summary краткие данные из списка — для мгновенного показа до загрузки
+ * @param siblings весь список каталога — из него собирается блок «другие вкусы бренда»
  * @param onChanged вызывается после изменений, чтобы обновить список на главной
  */
-export default function DrinkModal({ drinkId, summary, highlightReviewId, onClose, onChanged }) {
+export default function DrinkModal({ drinkId, summary, siblings, highlightReviewId, onClose, onChanged }) {
+  const navigate = useNavigate();
   const [drink, setDrink] = useState(summary || null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -34,6 +49,7 @@ export default function DrinkModal({ drinkId, summary, highlightReviewId, onClos
 
   const [nameDraft, setNameDraft] = useState(summary?.name || "");
   const [descDraft, setDescDraft] = useState(summary?.description || "");
+  const [specDraft, setSpecDraft] = useState(() => specDraftOf(summary));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
@@ -52,6 +68,7 @@ export default function DrinkModal({ drinkId, summary, highlightReviewId, onClos
       setDrink(full);
       setNameDraft(full.name || "");
       setDescDraft(full.description || "");
+      setSpecDraft(specDraftOf(full));
     } catch (e) {
       setError(e.message);
     }
@@ -72,7 +89,9 @@ export default function DrinkModal({ drinkId, summary, highlightReviewId, onClos
     setSaving(true);
     setError(null);
     try {
-      const updated = await updateDrink(drinkId, { name: nameDraft.trim(), description: descDraft });
+      await updateDrink(drinkId, { name: nameDraft.trim(), description: descDraft });
+      // характеристики — отдельным запросом: пустое поле означает «не заполнено», а не «не менять»
+      const updated = await updateDrinkSpecs(drinkId, specDraft);
       applyUpdate(updated);
       setEditing(false);
     } catch (e) {
@@ -81,6 +100,8 @@ export default function DrinkModal({ drinkId, summary, highlightReviewId, onClos
       setSaving(false);
     }
   };
+
+  const editSpec = (field, value) => setSpecDraft((prev) => ({ ...prev, [field]: value }));
 
   const handleDelete = async () => {
     if (!window.confirm(`Удалить энергетик «${drink?.name}» вместе со всеми отзывами и фото?`)) return;
@@ -150,6 +171,15 @@ export default function DrinkModal({ drinkId, summary, highlightReviewId, onClos
   const name = drink?.name || summary?.name || "…";
   const reviewCount = drink?.reviewCount || 0;
   const avg = drink?.averageRating || 0;
+  const specs = specRows(drink);
+
+  // другие вкусы того же бренда — самый частый следующий вопрос после «а что это за банка»
+  const related = useMemo(() => {
+    if (!drink?.brand || !Array.isArray(siblings)) return [];
+    return siblings
+      .filter((d) => d.brand === drink.brand && d.id !== drink.id)
+      .slice(0, 8);
+  }, [drink?.brand, drink?.id, siblings]);
 
   const BackBtn = (
     <button className="drink-hero-back" onClick={onClose} aria-label="Назад">
@@ -189,6 +219,43 @@ export default function DrinkModal({ drinkId, summary, highlightReviewId, onClos
                 <textarea className="input" style={{ minHeight: 90 }} value={descDraft}
                   onChange={(e) => setDescDraft(e.target.value)} placeholder="Вкус, состав, впечатления…" />
               </div>
+
+              <div className="spec-form">
+                <div className="input-label">Характеристики</div>
+                <div className="spec-form-grid">
+                  <label className="spec-field">
+                    <span>Объём, мл</span>
+                    <input className="input" inputMode="numeric" placeholder="449"
+                      value={specDraft.volumeMl} onChange={(e) => editSpec("volumeMl", e.target.value)} />
+                  </label>
+                  <label className="spec-field">
+                    <span>Кофеин, мг/100 мл</span>
+                    <input className="input" inputMode="decimal" placeholder="32"
+                      value={specDraft.caffeinePer100Ml} onChange={(e) => editSpec("caffeinePer100Ml", e.target.value)} />
+                  </label>
+                  <label className="spec-field">
+                    <span>Сахар, г/100 мл</span>
+                    <input className="input" inputMode="decimal" placeholder="11"
+                      value={specDraft.sugarPer100Ml} onChange={(e) => editSpec("sugarPer100Ml", e.target.value)} />
+                  </label>
+                  <label className="spec-field">
+                    <span>Ккал/100 мл</span>
+                    <input className="input" inputMode="decimal" placeholder="47"
+                      value={specDraft.kcalPer100Ml} onChange={(e) => editSpec("kcalPer100Ml", e.target.value)} />
+                  </label>
+                  <label className="spec-field">
+                    <span>Страна</span>
+                    <input className="input" placeholder="Россия"
+                      value={specDraft.country} onChange={(e) => editSpec("country", e.target.value)} />
+                  </label>
+                </div>
+                <label className="spec-field">
+                  <span>Состав</span>
+                  <textarea className="input" style={{ minHeight: 64 }} placeholder="Как на банке"
+                    value={specDraft.ingredients} onChange={(e) => editSpec("ingredients", e.target.value)} />
+                </label>
+              </div>
+
               <div className="row" style={{ flexWrap: "wrap" }}>
                 <button className="btn btn-primary btn-sm" onClick={saveInfo} disabled={saving}>
                   {saving ? "…" : "Сохранить"}
@@ -265,11 +332,57 @@ export default function DrinkModal({ drinkId, summary, highlightReviewId, onClos
                     <span className="drink-page-stat"><b>{reviewCount}</b> {ratingWord(reviewCount)}</span>
                   </>
                 ) : (
-                  <span className="muted">Пока нет оценок</span>
+                  <span className="muted">Пока нет оценок — вы можете стать первым</span>
                 )}
               </div>
 
+              {/* распределение оценок: в списке оно было, а на самой странице — нет */}
+              {reviewCount > 0 && (
+                <div className="drink-page-dist">
+                  <RatingBars dist={drink?.ratingDistribution} />
+                </div>
+              )}
+
+              {specs.length > 0 && (
+                <div className="spec-table">
+                  {specs.map((row) => (
+                    <div className="spec-row" key={row.label}>
+                      <span className="spec-row-label">{row.label}</span>
+                      <span className="spec-row-value">
+                        {row.value}
+                        {row.hint && <span className="spec-row-hint">{row.hint}</span>}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {drink?.description && <p className="modal-desc">{drink.description}</p>}
+
+              {drink?.ingredients && (
+                <details className="spec-ingredients">
+                  <summary>Состав</summary>
+                  <p>{drink.ingredients}</p>
+                </details>
+              )}
+
+              {related.length > 0 && (
+                <div className="related-block">
+                  <div className="related-title">Другие вкусы {drink.brand}</div>
+                  <div className="related-list">
+                    {related.map((d) => (
+                      <button type="button" key={d.id} className="related-chip"
+                        onClick={() => navigate(`/drink/${d.id}`)}>
+                        {d.coverUrl && <img src={mediaUrl(d.coverUrl)} alt="" loading="lazy" />}
+                        <span className="related-chip-name">{d.name}</span>
+                        <span className="related-chip-rating">
+                          {d.averageRating > 0 ? d.averageRating.toFixed(1) : "—"}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <ReviewSection drinkId={drinkId} showSummary={false} onChanged={handleReviewChange} highlightReviewId={highlightReviewId} />
             </div>

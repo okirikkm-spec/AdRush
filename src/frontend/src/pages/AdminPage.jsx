@@ -8,6 +8,7 @@ import ParseStagingModal from "../components/ParseStagingModal";
 import { BoxIcon, UsersIcon, ClipboardIcon, PlusIcon, RefreshIcon, ImageIcon } from "../components/icons";
 import {
   fetchMe, createDrink, fetchParseCandidates, addDrinkPhoto, addDrinkPhotoByUrl, optimizeMedia,
+  cleanupDescriptions,
 } from "../services/api";
 
 export default function AdminPage() {
@@ -57,6 +58,7 @@ export default function AdminPage() {
             <div className="admin-col">
               <ParserCard />
               <MediaOptimizeCard />
+              <DescriptionCleanupCard />
             </div>
           </div>
         )}
@@ -178,6 +180,43 @@ function MediaOptimizeCard() {
       </div>
       <button className="btn btn-primary" onClick={run} disabled={busy}>
         {busy ? "Обработка…" : "Оптимизировать медиа"}
+      </button>
+      {error && <div className="error-text">{error}</div>}
+      {msg && <div className="picker-result" style={{ marginTop: 10 }}>{msg}</div>}
+    </div>
+  );
+}
+
+function DescriptionCleanupCard() {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [error, setError] = useState(null);
+
+  const run = async () => {
+    if (!window.confirm("Убрать англоязычные и повторяющиеся описания? Тексты, написанные вручную, останутся.")) return;
+    setMsg(null);
+    setError(null);
+    setBusy(true);
+    try {
+      const r = await cleanupDescriptions();
+      setMsg(`Готово. Убрано англоязычных: ${r.foreign} · дублей: ${r.duplicated} · оставлено: ${r.kept}`);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="card">
+      <div className="card-title"><ImageIcon /> Чистка описаний</div>
+      <div className="badge-info" style={{ marginBottom: 14 }}>
+        Убирает у карточек описания, доставшиеся от парсеров: англоязычные (на русском сайте они
+        ничего не объясняют) и те, что слово в слово повторяются у нескольких напитков — такой текст
+        описывает бренд, а не вкус. Осмысленные описания на русском остаются.
+      </div>
+      <button className="btn btn-secondary" onClick={run} disabled={busy}>
+        {busy ? "Обработка…" : "Почистить описания"}
       </button>
       {error && <div className="error-text">{error}</div>}
       {msg && <div className="picker-result" style={{ marginTop: 10 }}>{msg}</div>}

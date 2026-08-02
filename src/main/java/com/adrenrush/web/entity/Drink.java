@@ -37,6 +37,24 @@ public class Drink {
     @Column(unique = true, length = 512)
     private String sourceUrl;
 
+    /* ─── Характеристики банки (заполняет админ или парсер; null = неизвестно) ─── */
+    /** Объём банки, мл. Парсеры его уже вычисляют для дедупликации — теперь он ещё и сохраняется. */
+    private Integer volumeMl;
+    /**
+     * Кофеин, мг на 100 мл. Именно так пишут на банках в РФ (обычно 30–32), а «на банку»
+     * считается из объёма — хранить оба числа значило бы дать им разойтись.
+     */
+    private Double caffeinePer100Ml;
+    /** Сахар, г на 100 мл. 0 — честный ноль (zero sugar), null — неизвестно. */
+    private Double sugarPer100Ml;
+    /** Энергетическая ценность, ккал на 100 мл. */
+    private Double kcalPer100Ml;
+    /** Состав — как на банке. */
+    @Column(columnDefinition = "text")
+    private String ingredients;
+    /** Страна производства («Россия», «Австрия», «США»). */
+    private String country;
+
     /* ─── Кадрирование обложки (настраивает админ; null = значения по умолчанию) ─── */
     /** object-fit обложки на карточке: "contain" или "cover". */
     private String coverFitCard;

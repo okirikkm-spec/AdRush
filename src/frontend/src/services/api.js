@@ -199,6 +199,14 @@ export function deleteDrink(id) {
 export function deleteDrinkPhoto(drinkId, photoId) {
   return jsonRequest(`/api/drinks/${drinkId}/photos/${photoId}`, { method: "DELETE", auth: true });
 }
+/**
+ * Сохранить характеристики банки (объём, кофеин, сахар, ккал, состав, страна). Значения идут
+ * строками из формы: пустая строка означает «не заполнено» и стирает прежнее значение.
+ */
+export function updateDrinkSpecs(id, specs) {
+  const body = Object.fromEntries(Object.entries(specs).map(([k, v]) => [k, v == null ? "" : String(v)]));
+  return jsonRequest(`/api/drinks/${id}/specs`, { method: "PUT", body, auth: true });
+}
 /** Сохранить кадрирование обложки (ракурс для карточки и окна). */
 export function updateCoverFraming(id, framing) {
   return jsonRequest(`/api/drinks/${id}/cover`, { method: "PUT", body: framing, auth: true });
@@ -245,6 +253,13 @@ export function forgetCandidate(id) {
  */
 export function optimizeMedia() {
   return jsonRequest(`/api/drinks/media/optimize`, { method: "POST", auth: true });
+}
+/**
+ * Чистка описаний от парсерных заглушек: англоязычных и повторяющихся у нескольких карточек.
+ * Возвращает { foreign, duplicated, kept }.
+ */
+export function cleanupDescriptions() {
+  return jsonRequest(`/api/drinks/descriptions/cleanup`, { method: "POST", auth: true });
 }
 export async function addDrinkPhoto(id, file) {
   const formData = new FormData();

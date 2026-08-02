@@ -20,8 +20,21 @@ public class ImageService {
 
     private static final Logger log = LoggerFactory.getLogger(ImageService.class);
 
-    /** Максимальная сторона превью в пикселях — с запасом под сетку карточек/ретину. */
-    public static final int THUMB_MAX_DIM = 600;
+    /**
+     * Максимальная сторона превью в пикселях. В карточке обложка занимает 92 px, так что 256
+     * покрывает даже трёхкратную плотность экрана. Раньше стояло 600 — больше, чем сами пэкшоты
+     * магазинов (обычно ~150×370), поэтому «превью» получалось в натуральную величину, не проходило
+     * проверку «легче оригинала» и не сохранялось вовсе: две трети списка грузили полноразмерные PNG.
+     */
+    public static final int THUMB_MAX_DIM = 256;
+
+    /**
+     * Округление каналов у превью — до 5 бит против 6 у полноразмерной картинки. На 92 px разницу
+     * не видно, а вес прозрачного PNG падает примерно вдвое: одинаковых соседних пикселей больше,
+     * и zlib сжимает их лучше.
+     */
+    private static final int THUMB_COLOR_MASK = 0x00F8F8F8;
+    private static final int FULL_COLOR_MASK = 0x00FCFCFC;
 
     /**
      * Фоном считаем пиксель не темнее этого по каждому каналу. 232, а не 255: у JPEG студийный
@@ -75,7 +88,8 @@ public class ImageService {
         int w = scaled.getWidth();
         int h = scaled.getHeight();
         int[] px = scaled.getRGB(0, 0, w, h, null, 0, w);
-        posterize(px);
+        clearInvisibleColors(px);
+        posterize(px, THUMB_COLOR_MASK);
         BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
         out.setRGB(0, 0, w, h, px, 0, w);
 
@@ -92,6 +106,22 @@ public class ImageService {
             .outputFormat("jpg")
             .toOutputStream(out);
         return out.toByteArray();
+    }
+
+    /**
+     * Длинная сторона картинки больше нынешнего предела для превью. По этому признаку находятся
+     * превью, собранные при прежнем (втрое большем) значении {@link #THUMB_MAX_DIM}, — их стоит
+     * пересобрать.
+     */
+    public boolean exceedsThumbSize(byte[] data) {
+        if (data == null || data.length == 0) return false;
+        try {
+            BufferedImage img = ImageIO.read(new ByteArrayInputStream(data));
+            return img != null && Math.max(img.getWidth(), img.getHeight()) > THUMB_MAX_DIM;
+        } catch (Exception e) {
+            log.debug("Размеры превью не прочитаны: {}", e.getMessage());
+            return false;
+        }
     }
 
     /**
@@ -128,7 +158,8 @@ public class ImageService {
             if (ratio < MIN_BACKGROUND_RATIO || ratio > MAX_BACKGROUND_RATIO) return Optional.empty();
 
             applyTransparency(px, smoothAlpha(buildAlpha(px, background, w, h), w, h), w, h);
-            posterize(px);
+            clearInvisibleColors(px);
+            posterize(px, FULL_COLOR_MASK);
 
             BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
             out.setRGB(0, 0, w, h, px, 0, w);
@@ -307,13 +338,25 @@ public class ImageService {
     }
 
     /**
-     * Округляет каналы до 6 бит. PNG с прозрачностью в разы тяжелее исходного JPEG, а больше всего
-     * весит шум компрессии: после округления соседние пиксели чаще совпадают и файл сжимается
-     * примерно на треть. Глазом разница не видна — проверено на пэкшотах с градиентами.
+     * Огрубляет цвета до заданной маски (6 бит на канал у полной картинки, 5 — у превью). PNG с
+     * прозрачностью в разы тяжелее исходного JPEG, а больше всего весит шум компрессии: после
+     * округления соседние пиксели чаще совпадают и файл сжимается примерно на треть. Глазом разница
+     * не видна — проверено на пэкшотах с градиентами.
      */
-    private void posterize(int[] px) {
+    private void posterize(int[] px, int colorMask) {
         for (int i = 0; i < px.length; i++) {
-            px[i] = (px[i] & 0xFF000000) | (px[i] & 0x00FCFCFC);
+            px[i] = (px[i] & 0xFF000000) | (px[i] & colorMask);
+        }
+    }
+
+    /**
+     * Обнуляет цвет полностью прозрачных пикселей. Их не видно, но свои (разные) значения RGB они
+     * хранят и мешают сжатию: у пэкшота с вырезанным фоном это больше половины картинки, и после
+     * обнуления вся эта область становится одной длинной серией одинаковых байтов.
+     */
+    private void clearInvisibleColors(int[] px) {
+        for (int i = 0; i < px.length; i++) {
+            if ((px[i] >>> 24) == 0) px[i] = 0;
         }
     }
 

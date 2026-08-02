@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   fetchReviews, fetchRating, submitReview, deleteMyReview, isAuthenticated,
@@ -24,6 +24,8 @@ export default function ReviewSection({ drinkId, showSummary = true, onChanged, 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  // порядок отзывов: по умолчанию новые сверху, как приходят с сервера
+  const [reviewSort, setReviewSort] = useState("new");
   const [banTarget, setBanTarget] = useState(null);
   // мини-профиль автора: { userId, anchor, self } — anchor задаёт, где всплыть
   const [cardTarget, setCardTarget] = useState(null);
@@ -54,6 +56,13 @@ export default function ReviewSection({ drinkId, showSummary = true, onChanged, 
   useEffect(() => {
     load().catch((e) => setError(e.message));
   }, [load]);
+
+  // сервер отдаёт отзывы «свежие сверху»; остальные порядки считаем на месте
+  const sortedReviews = useMemo(() => {
+    if (reviewSort === "high") return [...reviews].sort((a, b) => b.rating - a.rating);
+    if (reviewSort === "low") return [...reviews].sort((a, b) => a.rating - b.rating);
+    return reviews;
+  }, [reviews, reviewSort]);
 
   // прокрутка и подсветка отзыва, на который перешли из чата (?review=id) — однократно
   const scrolledTo = useRef(null);
@@ -178,12 +187,24 @@ export default function ReviewSection({ drinkId, showSummary = true, onChanged, 
       </div>
 
       <div className="section">
-        <h3 className="section-title">Отзывы пользователей ({reviews.length})</h3>
+        <div className="section-head">
+          <h3 className="section-title">Отзывы пользователей ({reviews.length})</h3>
+          {reviews.length > 1 && (
+            <label className="sort-control">
+              <span className="sort-label">Сначала</span>
+              <select className="sort-select" value={reviewSort} onChange={(e) => setReviewSort(e.target.value)}>
+                <option value="new">новые</option>
+                <option value="high">высокие оценки</option>
+                <option value="low">низкие оценки</option>
+              </select>
+            </label>
+          )}
+        </div>
         {reviews.length === 0 ? (
           <div className="state" style={{ padding: 30 }}>Пока никто не оставил отзыв.</div>
         ) : (
           <div className="review-list">
-            {reviews.map((r) => (
+            {sortedReviews.map((r) => (
               <div key={r.id} id={`review-${r.id}`} className={`review ${r.mine ? "mine" : ""}`}>
                 <div className="review-head">
                   {/* Автор открывает мини-профиль, а не уводит со страницы: карточку

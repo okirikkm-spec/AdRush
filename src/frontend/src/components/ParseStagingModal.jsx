@@ -6,6 +6,13 @@ import {
 import { CheckIcon, RefreshIcon } from "./icons";
 
 /**
+ * Текст без единой русской буквы. Магазины подставляют одну и ту же английскую фразу про бренд
+ * сразу всем вкусам; такое описание сервер в каталог не пропускает, и предупредить об этом надо
+ * здесь — иначе админ жмёт «добавить» и удивляется, куда делось описание.
+ */
+const isForeign = (text) => !!text && !/[А-Яа-яЁё]/.test(text);
+
+/**
  * Приёмка каталога: показывает, что нашли парсеры, и даёт решить судьбу каждой позиции.
  *
  * Карточки каталога создаются только по кнопке «Добавить выбранные». Позиции без галочки уходят в
@@ -202,8 +209,17 @@ export default function ParseStagingModal({ onClose }) {
                           placeholder="Описание (необязательно)"
                           value={edits[item.id]?.description ?? item.description ?? ""}
                           onChange={(e) => editField(item.id, "description", e.target.value)} />
+                        {isForeign(edits[item.id]?.description ?? item.description) && (
+                          <div className="staging-desc-warn">
+                            Описание из источника без русского текста — в каталог оно не попадёт.
+                            Напишите своё или оставьте пустым.
+                          </div>
+                        )}
                         <div className="staging-meta">
-                          <span className="muted">{item.brand} · {item.source}</span>
+                          <span className="muted">
+                            {item.brand} · {item.source}
+                            {item.volumeMl ? ` · ${item.volumeMl} мл` : ""}
+                          </span>
                           {item.similarTo && (
                             <span className="staging-warn">похоже на «{item.similarTo}»</span>
                           )}

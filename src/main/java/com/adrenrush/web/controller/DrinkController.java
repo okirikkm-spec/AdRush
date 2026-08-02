@@ -84,6 +84,49 @@ public class DrinkController {
         return ResponseEntity.ok(drinkService.update(currentUser, id, body.get("name"), body.get("description")));
     }
 
+    /**
+     * Характеристики банки (объём, кофеин, сахар, калории, состав, страна) — только администратор.
+     * Значения приходят строками из формы: пустая строка означает «не заполнено».
+     */
+    @PutMapping("/{id}/specs")
+    public ResponseEntity<DrinkResponseDto> updateSpecs(@PathVariable Long id,
+                                                        @AuthenticationPrincipal User currentUser,
+                                                        @RequestBody Map<String, String> body) {
+        requireAdmin(currentUser);
+        return ResponseEntity.ok(drinkService.updateSpecs(currentUser, id,
+            intOrNull(body.get("volumeMl")),
+            decimalOrNull(body.get("caffeinePer100Ml")),
+            decimalOrNull(body.get("sugarPer100Ml")),
+            decimalOrNull(body.get("kcalPer100Ml")),
+            body.get("ingredients"), body.get("country")));
+    }
+
+    private Integer intOrNull(String raw) {
+        Double value = decimalOrNull(raw);
+        return value == null ? null : (int) Math.round(value);
+    }
+
+    /** Число из формы: принимаем и «32.5», и «32,5»; мусор и пустая строка — это «не заполнено». */
+    private Double decimalOrNull(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        try {
+            return Double.valueOf(raw.trim().replace(',', '.'));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Чистка описаний, доставшихся от парсеров: англоязычные заглушки и тексты, повторяющиеся
+     * у нескольких карточек. Только администратор.
+     */
+    @PostMapping("/descriptions/cleanup")
+    public ResponseEntity<DrinkService.DescriptionCleanupResult> cleanupDescriptions(
+        @AuthenticationPrincipal User currentUser) {
+        requireAdmin(currentUser);
+        return ResponseEntity.ok(drinkService.cleanupDescriptions(currentUser));
+    }
+
     /** Настройка кадрирования обложки (ракурс для карточки и окна) — только администратор. */
     @PutMapping("/{id}/cover")
     public ResponseEntity<DrinkResponseDto> updateCover(@PathVariable Long id,
