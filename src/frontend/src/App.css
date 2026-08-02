@@ -824,11 +824,16 @@ a.mini-review-name:hover { color: var(--accent); }
 .review-author-btn {
   display: inline-flex; align-items: center; padding: 0; border: none; background: none;
   font: inherit; color: inherit; text-align: left; cursor: pointer;
-  overflow-wrap: anywhere; min-width: 0;
+  min-width: 0;
 }
+/* Длинное имя ужимается многоточием и остаётся одной строкой: иначе оценка, дата
+   и «⋮» уезжают под него (полное имя видно в мини-профиле по клику). */
+button.review-author { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 button.review-author:hover { color: var(--accent); }
 .review-date { color: var(--text-faint); font-size: 12px; margin-left: auto; }
 .review-rating { color: var(--gold); font-weight: 700; font-size: 13px; }
+/* Всё правее имени ужиматься не должно — сжимается только имя */
+.review-rating, .review-date, .review-head > .review-author-btn:first-child { flex-shrink: 0; }
 .review-text {
   color: var(--text); font-size: 14px; white-space: pre-wrap;
   /* Длинные строки без пробелов (вфффф…) не должны вылезать за карточку. */
@@ -1481,8 +1486,9 @@ button.review-author:hover { color: var(--accent); }
   .section { margin-bottom: 22px; }
   .gallery-main { aspect-ratio: 4 / 3; }
 
-  /* Отзывы */
-  .review-head { flex-wrap: wrap; gap: 8px; }
+  /* Отзывы. Шапку не переносим: при длинном нике на новую строку уезжало «⋮» —
+     вместо переноса ужимается само имя (см. button.review-author). */
+  .review-head { gap: 8px; }
   .review { padding: 13px 14px; }
   .review-form { padding: 16px; }
 
@@ -1718,7 +1724,7 @@ button.review-author:hover { color: var(--accent); }
 }
 .chat-user-row:hover { border-color: var(--border-light); background: var(--surface-3); }
 .chat-user-info { min-width: 0; }
-.chat-user-name { font-size: 14px; font-weight: 600; }
+.chat-user-name { font-size: 14px; font-weight: 700; }
 .chat-user-login { font-size: 12px; color: var(--text-muted); }
 /* Строка с обложкой профиля: картинка фоном, содержимое поверх неё. */
 .chat-user-row { position: relative; overflow: hidden; }
