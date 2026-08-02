@@ -168,3 +168,215 @@ export function ShieldIcon({ size = 16 }) {
     </svg>
   );
 }
+
+/* ── Молния логотипа: заглушка там, где у энергетика нет фото.
+      Единственная заливаемая иконка набора — форма совпадает с молнией в шапке. ── */
+export function BoltIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M13 2 L4 14 h6 l-2 8 11-14 h-6 z" />
+    </svg>
+  );
+}
+
+/** Коробка — раздел каталога. */
+export function BoxIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 8.2l9-4.2 9 4.2v7.6l-9 4.2-9-4.2V8.2z" />
+      <path d="M3 8.2l9 4.2 9-4.2M12 12.4V20" />
+    </svg>
+  );
+}
+
+/** Два силуэта — раздел пользователей. */
+export function UsersIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M16 21v-1.8a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4V21" />
+      <circle cx="9" cy="7.5" r="3.5" />
+      <path d="M22 21v-1.8a4 4 0 0 0-3-3.85M16.5 4.2a4 4 0 0 1 0 7.1" />
+    </svg>
+  );
+}
+
+/** Планшет со строками — журнал аудита. */
+export function ClipboardIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M9 4H7a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2" />
+      <rect x="9" y="2.5" width="6" height="3.5" rx="1" />
+      <path d="M8.5 11h7M8.5 15h4.5" />
+    </svg>
+  );
+}
+
+/** Плюс — добавление карточки. */
+export function PlusIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
+/** Круговые стрелки — парсинг каталогов. */
+export function RefreshIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20.5 12a8.5 8.5 0 0 1-14.6 5.9M3.5 12a8.5 8.5 0 0 1 14.6-5.9" />
+      <polyline points="18.2 2.6 18.2 6.5 14.3 6.5" />
+      <polyline points="5.8 21.4 5.8 17.5 9.7 17.5" />
+    </svg>
+  );
+}
+
+/** Гаечный ключ — вход в админку. */
+export function WrenchIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14.7 6.3a4.5 4.5 0 0 0 5.9 5.9l-8.4 8.4a2.4 2.4 0 0 1-3.4-3.4l8.4-8.4z" />
+      <path d="M14.7 6.3L11.2 2.8a4.5 4.5 0 0 0-5.9 5.9l3.5 3.5" />
+    </svg>
+  );
+}
+
+/** Молоток — бан пользователя. */
+export function HammerIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M13.5 7.5L20 14l-2.5 2.5L11 10" />
+      <path d="M15.8 3.2l5 5-2.3 2.3-5-5z" />
+      <path d="M10.3 8.7L3 16v5h5l7.3-7.3" />
+    </svg>
+  );
+}
+
+/** Треугольник с восклицательным знаком — предупреждение. */
+export function WarnIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 3.6l9 15.6H3l9-15.6z" />
+      <path d="M12 9.5v4M12 16.6h.01" />
+    </svg>
+  );
+}
+
+/** Корзина — удаление. */
+export function TrashIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 6.5h16M9.5 6.5V4.2h5v2.3" />
+      <path d="M6.5 6.5l.8 13a1.5 1.5 0 0 0 1.5 1.4h6.4a1.5 1.5 0 0 0 1.5-1.4l.8-13" />
+      <path d="M10.5 10.5v6.5M13.5 10.5v6.5" />
+    </svg>
+  );
+}
+
+/** Звезда — выдача прав администратора. */
+export function StarIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1.1 5.9-5.3-2.9-5.3 2.9 1.1-5.9L3.5 9.7l5.9-.8L12 3.5z" />
+    </svg>
+  );
+}
+
+/** Стрелка вниз — снятие прав администратора. */
+export function ArrowDownIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 4.5v15" />
+      <polyline points="6 13.5 12 19.5 18 13.5" />
+    </svg>
+  );
+}
+
+/** Фотоаппарат — снимок или фото в сообщении. */
+export function CameraIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 8.5a2 2 0 0 1 2-2h2.2l1.3-2h6l1.3 2H19a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-9z" />
+      <circle cx="12" cy="13" r="3.4" />
+    </svg>
+  );
+}
+
+/** Палитра — тема оформления (та же, что на кнопке редактора тем в шапке). */
+export function PaletteIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="13.5" cy="6.5" r="1.4" /><circle cx="17.5" cy="10.5" r="1.4" />
+      <circle cx="8.5" cy="7.5" r="1.4" /><circle cx="6.5" cy="12.5" r="1.4" />
+      <path d="M12 2a10 10 0 0 0 0 20c1.7 0 2.5-1.3 2-2.7-.4-1.1.4-2.3 1.6-2.3H18a4 4 0 0 0 4-4 10 10 0 0 0-10-11z" />
+    </svg>
+  );
+}
+
+/** Стакан с трубочкой — карточка энергетика. */
+export function CupIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M6 8h12l-1.3 11.3a1.8 1.8 0 0 1-1.8 1.6H9.1a1.8 1.8 0 0 1-1.8-1.6L6 8z" />
+      <path d="M5 8h14M13.5 8l2-5" />
+    </svg>
+  );
+}
+
+/** Стрелка из рамки — «поделиться». */
+export function ShareIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M11 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-5" />
+      <path d="M14.5 3.5H21v6.5M21 3.5L11.5 13" />
+    </svg>
+  );
+}
+
+/** Колокольчик — системные уведомления. */
+export function BellIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M18 9a6 6 0 0 0-12 0c0 6-2.2 7.5-2.2 7.5h16.4S18 15 18 9z" />
+      <path d="M13.7 20a2 2 0 0 1-3.4 0" />
+    </svg>
+  );
+}
+
+/** Замок — закрытый профиль. */
+export function LockIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="4.5" y="10.5" width="15" height="10.5" rx="2" />
+      <path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" />
+    </svg>
+  );
+}
+
+/** Дверь со стрелкой — выход из аккаунта. */
+export function LogoutIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2H14" />
+      <path d="M17.5 8.5L21 12l-3.5 3.5M20.5 12H10" />
+    </svg>
+  );
+}

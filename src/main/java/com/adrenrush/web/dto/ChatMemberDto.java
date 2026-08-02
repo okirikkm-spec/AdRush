@@ -14,7 +14,7 @@ public class ChatMemberDto {
 
     public static ChatMemberDto from(ConversationMember m) {
         ChatMemberDto dto = new ChatMemberDto();
-        dto.setUser(UserBriefDto.from(m.getUser()));
+        dto.setUser(UserBriefDto.fromWithBanner(m.getUser()));
         dto.setOwner(m.isOwner());
         dto.setLastReadAt(m.getLastReadAt());
         return dto;

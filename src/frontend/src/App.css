@@ -395,6 +395,8 @@ textarea.input { resize: vertical; min-height: 84px; line-height: 1.5; }
 .page { max-width: 920px; margin: 0 auto; padding: 28px 20px 80px; }
 .page-narrow { max-width: 560px; }
 .page-title { font-size: 26px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 4px; }
+/* Иконки внутри строк текста (заголовки, заглушки) — по базовой линии, а не по низу строки */
+.page-title svg, .state svg { vertical-align: -0.14em; }
 .page-subtitle { color: var(--text-muted); margin-bottom: 24px; }
 .page-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
 .page-head .page-title { margin-bottom: 0; }
@@ -668,7 +670,7 @@ a.mini-review-name:hover { color: var(--accent); }
   object-fit: contain; padding: 14px; background: var(--surface-2); border: 1px solid var(--border);
 }
 .gallery-main-empty {
-  display: flex; align-items: center; justify-content: center;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
   color: var(--text-faint); font-size: 15px;
 }
 .gallery-thumbs {
@@ -818,6 +820,13 @@ a.mini-review-name:hover { color: var(--accent); }
 }
 .review-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .review-author { font-weight: 700; font-size: 14px; }
+/* Автор отзыва — кнопка (открывает мини-профиль), но выглядит как обычный текст/аватарка */
+.review-author-btn {
+  display: inline-flex; align-items: center; padding: 0; border: none; background: none;
+  font: inherit; color: inherit; text-align: left; cursor: pointer;
+  overflow-wrap: anywhere; min-width: 0;
+}
+button.review-author:hover { color: var(--accent); }
 .review-date { color: var(--text-faint); font-size: 12px; margin-left: auto; }
 .review-rating { color: var(--gold); font-weight: 700; font-size: 13px; }
 .review-text {
@@ -870,6 +879,74 @@ a.mini-review-name:hover { color: var(--accent); }
 .reaction-pick:hover { background: var(--surface-2); transform: scale(1.18); }
 .reaction-pick.mine { background: var(--accent-dim); }
 
+/* ─────────────── Мини-профиль автора отзыва ───────────────
+   Всплывает у шапки отзыва; позиция (fixed) проставляется из UserCard.
+   z-index выше окна карточки энергетика (200) и окна «Поделиться» (300). */
+.user-card {
+  position: fixed; z-index: 400;
+  background: var(--surface); border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+  /* на низком экране карточка выше него — прокручиваем её саму, а не выпускаем за край */
+  max-height: calc(100vh - 24px); overflow: hidden auto;
+  animation: pop 0.15s ease;
+}
+.user-card-state { padding: 22px; text-align: center; color: var(--text-muted); font-size: 13px; }
+
+/* Шапка повторяет карточку профиля: обложка фоном, текст поверх */
+.user-card-hero { position: relative; overflow: hidden; padding: 14px 16px; }
+.user-card-head { position: relative; z-index: 1; display: flex; align-items: center; gap: 12px; }
+.user-card-id { min-width: 0; }
+.user-card-name {
+  display: inline-block; font-size: 16px; font-weight: 800; cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.user-card-name:hover { text-decoration: underline; }
+.user-card-login { font-size: 12px; color: var(--text-muted); overflow-wrap: anywhere; }
+.user-card-role { margin-top: 6px; }
+/* Обложку не затемняем — читаемость держим тенью, как в .profile-hero */
+.user-card-hero.has-banner .user-card-name,
+.user-card-hero.has-banner .user-card-login { color: #fff; text-shadow: 0 1px 4px rgba(0, 0, 0, .75); }
+.user-card-hero.has-banner .user-card-role {
+  background: rgba(0, 0, 0, .55); color: #fff; text-shadow: 0 1px 4px rgba(0, 0, 0, .75);
+}
+.user-card-hero.has-banner .avatar,
+.user-card-hero.has-banner .avatar-fallback {
+  border: 2px solid rgba(255, 255, 255, .85); box-sizing: content-box;
+}
+
+.user-card-body {
+  display: flex; flex-direction: column; gap: 9px;
+  padding: 12px 16px; border-top: 1px solid var(--border);
+}
+.user-card-line { display: flex; align-items: center; gap: 7px; font-size: 12.5px; min-width: 0; }
+.user-card-line.muted { color: var(--text-muted); }
+.user-card-line svg, .user-card-top svg { flex-shrink: 0; color: var(--text-faint); }
+
+/* Любимый энергетик: подпись сверху, название с оценкой — строкой ниже */
+.user-card-top { display: flex; align-items: flex-start; gap: 7px; font-size: 12.5px; }
+.user-card-top svg { margin-top: 2px; }
+.user-card-top-body { min-width: 0; flex: 1; }
+.user-card-top-label { color: var(--text-muted); font-size: 11px; margin-bottom: 4px; }
+.user-card-top-drink { display: flex; align-items: baseline; gap: 8px; line-height: 1.35; }
+.user-card-link {
+  padding: 0; border: none; background: none; font: inherit; font-weight: 700;
+  color: var(--accent); cursor: pointer; text-align: left; overflow-wrap: anywhere; min-width: 0;
+}
+.user-card-link:hover { text-decoration: underline; }
+.user-card-rating { margin-left: auto; color: var(--gold); font-weight: 700; white-space: nowrap; }
+
+.user-card-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.user-card-stat {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center;
+  padding: 8px 4px; background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+.user-card-stat b { font-size: 16px; font-weight: 800; }
+.user-card-stat span { font-size: 10.5px; line-height: 1.25; color: var(--text-muted); }
+
+.user-card-actions { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); }
+.user-card-actions .btn { flex: 1; padding-left: 10px; padding-right: 10px; }
+
 /* ─────────────── Avatar ─────────────── */
 .avatar {
   border-radius: 50%; object-fit: cover; background: var(--surface-3);
@@ -910,9 +987,11 @@ a.mini-review-name:hover { color: var(--accent); }
 /* Обложка — обычный <img> под содержимым, как аватарка и превью в модалке:
    одна и та же техника object-fit/object-position, поэтому предпросмотр
    совпадает с результатом. CSS-фон для этого не годился. */
-/* Слой обложки: обёртка = размер плашки (её translate считается от плашки),
-   картинка внутри отцентрована и покрывает плашку при масштабе 1. */
+/* Слой обложки: контейнер только задаёт место (по нему меряют), внутри —
+   плашка кадра (её translate считается от плашки), картинка отцентрована в
+   плашке и покрывает её при масштабе 1. */
 .banner-layer { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.banner-plate { position: absolute; left: 50%; top: 50%; }
 /* Размеры проставляются инлайном из BannerLayer — здесь только снимаем
    ограничения, которые иначе ужмут картинку. */
 .banner-img {
@@ -1033,12 +1112,21 @@ a.mini-review-name:hover { color: var(--accent); }
 /* Модификатор: вкладки делят всю ширину поровну (узкие формы — например, вход/восстановление) */
 .tabs-fill .admin-tab, .tabs-fill .profile-tab { flex: 1; justify-content: center; }
 
-/* Сетка карточек внутри раздела «Каталог» */
+/* Сетка карточек внутри раздела «Каталог».
+   align-items намеренно не задаём (stretch по умолчанию): ячейки одной строки
+   тянутся до общей высоты, поэтому колонка «парсинг + оптимизация» в сумме
+   равна карточке добавления энергетика. */
 .admin-cards {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 18px; align-items: start;
+  gap: 18px;
 }
 .admin-cards .card { margin-bottom: 0; }
+/* Колонка внутри сетки: карточки идут строго друг под другом (парсинг → оптимизация)
+   и поровну делят высоту колонки. Свободное место уходит над кнопкой — она
+   прижимается к низу карточки, как «Создать карточку» у соседней колонки. */
+.admin-col { display: flex; flex-direction: column; gap: 18px; }
+.admin-col > .card { flex: 1; display: flex; flex-direction: column; }
+.admin-col > .card > .btn { margin-top: auto; align-self: flex-start; }
 .badge-info { font-size: 13px; color: var(--text-muted); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 14px; }
 
 /* ─────────────── Brand filter (главная) ─────────────── */
@@ -1281,8 +1369,8 @@ a.mini-review-name:hover { color: var(--accent); }
 .audit-main { flex: 1; min-width: 0; }
 .audit-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .audit-badge {
-  display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 9px;
-  border-radius: 100px; background: var(--surface-3); color: var(--text);
+  display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700;
+  padding: 3px 9px; border-radius: 100px; background: var(--surface-3); color: var(--text);
 }
 .audit-act-ban, .audit-act-del { background: var(--accent-dim); color: var(--error); }
 .audit-act-warn { background: rgba(245, 180, 60, .16); color: var(--gold); }
@@ -1487,6 +1575,8 @@ a.mini-review-name:hover { color: var(--accent); }
   flex: 1; min-width: 0; font-size: 13px; color: var(--text-muted);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* Значок типа вложения перед текстом превью — не должен ронять строку вниз */
+.chat-conv-preview svg { vertical-align: -0.16em; margin-right: 4px; }
 .chat-unread {
   flex-shrink: 0; min-width: 19px; height: 19px; padding: 0 6px;
   display: flex; align-items: center; justify-content: center;
@@ -1522,6 +1612,20 @@ a.mini-review-name:hover { color: var(--accent); }
   border-radius: var(--radius-sm); font: inherit; color: inherit; cursor: pointer; text-align: left;
 }
 .chat-main-head-card:hover { background: var(--surface-2); }
+/* Обложка профиля собеседника — фоном шапки личной беседы. Слой тот же, что
+   в мини-профиле (BannerLayer под содержимым), читаемость держим тенью текста. */
+.chat-main-head { position: relative; overflow: hidden; }
+.chat-main-head.has-banner .chat-back,
+.chat-main-head.has-banner .chat-main-head-card { position: relative; z-index: 1; }
+.chat-main-head.has-banner .chat-main-title,
+.chat-main-head.has-banner .chat-main-sub {
+  color: #fff; text-shadow: 0 1px 4px rgba(0, 0, 0, .75);
+}
+.chat-main-head.has-banner .chat-back { color: #fff; text-shadow: 0 1px 4px rgba(0, 0, 0, .75); }
+.chat-main-head.has-banner .chat-main-head-card:hover { background: rgba(255, 255, 255, .16); }
+/* Обводка тенью, а не border: не сдвигает вёрстку шапки. */
+.chat-main-head.has-banner .avatar,
+.chat-main-head.has-banner .avatar-fallback { box-shadow: 0 0 0 2px rgba(255, 255, 255, .85); }
 /* Служебное сообщение (смена фото/названия группы) — по центру, без пузыря. */
 .chat-service-msg { text-align: center; margin: 10px auto; max-width: 85%; font-size: 12px; color: var(--text-muted); }
 /* Настройки группы в модалке участников. */
@@ -1616,6 +1720,18 @@ a.mini-review-name:hover { color: var(--accent); }
 .chat-user-info { min-width: 0; }
 .chat-user-name { font-size: 14px; font-weight: 600; }
 .chat-user-login { font-size: 12px; color: var(--text-muted); }
+/* Строка с обложкой профиля: картинка фоном, содержимое поверх неё. */
+.chat-user-row { position: relative; overflow: hidden; }
+.chat-user-row.has-banner > .avatar,
+.chat-user-row.has-banner > .avatar-fallback,
+.chat-user-row.has-banner .chat-user-info { position: relative; z-index: 1; }
+.chat-user-row.has-banner .chat-user-name,
+.chat-user-row.has-banner .chat-user-login {
+  color: #fff; text-shadow: 0 1px 4px rgba(0, 0, 0, .75);
+}
+.chat-user-row.has-banner > .avatar,
+.chat-user-row.has-banner > .avatar-fallback { box-shadow: 0 0 0 2px rgba(255, 255, 255, .85); }
+.chat-user-row.has-banner:hover { border-color: rgba(255, 255, 255, .5); }
 .chat-empty-sm { text-align: center; color: var(--text-muted); font-size: 13px; padding: 10px; }
 .chat-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
 .chat-chip {
@@ -1649,6 +1765,7 @@ a.mini-review-name:hover { color: var(--accent); }
 .chat-card-cover-empty { display: flex; align-items: center; justify-content: center; font-size: 22px; }
 .chat-card-info { min-width: 0; }
 .chat-card-title { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-card-title svg { vertical-align: -0.14em; margin-right: 5px; }
 .chat-card-sub { font-size: 12px; color: var(--text-muted); }
 .chat-card-meta { font-size: 12px; color: var(--gold); font-weight: 700; margin-top: 2px; }
 .chat-card-review { padding: 10px 12px; }

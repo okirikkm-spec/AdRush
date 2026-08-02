@@ -3,7 +3,7 @@ import {
   fetchParseSources, runParse, fetchParseCandidates, applyCandidates,
   unignoreCandidate, forgetCandidate,
 } from "../services/api";
-import { CheckIcon } from "./icons";
+import { CheckIcon, RefreshIcon } from "./icons";
 
 /**
  * Приёмка каталога: показывает, что нашли парсеры, и даёт решить судьбу каждой позиции.
@@ -123,7 +123,7 @@ export default function ParseStagingModal({ onClose }) {
       <div className="modal modal-picker modal-staging" onClick={(e) => e.stopPropagation()} role="dialog">
         <div className="picker-head">
           <div className="picker-head-main">
-            <span className="picker-icon">🔄</span>
+            <span className="picker-icon"><RefreshIcon size={20} /></span>
             <div>
               <h2 className="picker-title">Приёмка каталога</h2>
               <p className="picker-sub">Отметьте напитки для добавления — остальные уйдут в игнор</p>

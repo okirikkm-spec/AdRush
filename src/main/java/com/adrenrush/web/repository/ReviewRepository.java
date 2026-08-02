@@ -18,6 +18,12 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
 
     List<Review> findByUserIdOrderByUpdatedAtDesc(Long userId);
 
+    /** Последний отзыв пользователя — «был активен» в карточке мини-профиля. */
+    Optional<Review> findFirstByUserIdOrderByUpdatedAtDesc(Long userId);
+
+    /** Самая высокая оценка пользователя (при равных — поставленная позже). */
+    Optional<Review> findFirstByUserIdOrderByRatingDescUpdatedAtDesc(Long userId);
+
     int countByUserId(Long userId);
 
     void deleteByUserId(Long userId);
@@ -26,6 +32,10 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
 
     @Query("SELECT AVG(r.rating) FROM Review r WHERE r.drink.id = :drinkId")
     Double getAverageByDrinkId(@Param("drinkId") Long drinkId);
+
+    /** Средняя оценка, которую ставит сам пользователь (null — отзывов нет). */
+    @Query("SELECT AVG(r.rating) FROM Review r WHERE r.user.id = :userId")
+    Double getAverageByUserId(@Param("userId") Long userId);
 
     @Query("SELECT COUNT(r) FROM Review r WHERE r.drink.id = :drinkId")
     Integer getCountByDrinkId(@Param("drinkId") Long drinkId);

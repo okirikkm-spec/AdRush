@@ -7,8 +7,10 @@ import {
 import RatingStars from "./RatingStars";
 import RatingSlider from "./RatingSlider";
 import Avatar from "./Avatar";
+import UserCard from "./UserCard";
 import BanModal from "./BanModal";
 import { ShareModal } from "./ShareControl";
+import { ShareIcon, WarnIcon, HammerIcon, TrashIcon } from "./icons";
 
 export default function ReviewSection({ drinkId, showSummary = true, onChanged, highlightReviewId }) {
   const navigate = useNavigate();
@@ -23,6 +25,13 @@ export default function ReviewSection({ drinkId, showSummary = true, onChanged, 
   const [error, setError] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [banTarget, setBanTarget] = useState(null);
+  // мини-профиль автора: { userId, anchor, self } — anchor задаёт, где всплыть
+  const [cardTarget, setCardTarget] = useState(null);
+
+  /* Повторный клик по тому же автору закрывает карточку (кнопка работает как переключатель). */
+  const openCard = (review, anchor) => setCardTarget((prev) =>
+    prev && prev.anchor === anchor ? null : { userId: review.userId, anchor, self: review.mine });
+  const closeCard = useCallback(() => setCardTarget(null), []);
 
   useEffect(() => {
     if (authed) fetchMe().then((me) => setIsAdmin(me?.role === "ADMIN")).catch(() => {});
@@ -177,10 +186,16 @@ export default function ReviewSection({ drinkId, showSummary = true, onChanged, 
             {reviews.map((r) => (
               <div key={r.id} id={`review-${r.id}`} className={`review ${r.mine ? "mine" : ""}`}>
                 <div className="review-head">
-                  <Link to={`/user/${r.userId}`}>
+                  {/* Автор открывает мини-профиль, а не уводит со страницы: карточку
+                      читают, не теряя список отзывов. Переход в профиль — уже из неё. */}
+                  <button type="button" className="review-author-btn"
+                    onClick={(e) => openCard(r, e.currentTarget)} title="Показать профиль">
                     <Avatar url={r.userAvatarUrl} name={r.userDisplayName} size={32} />
-                  </Link>
-                  <Link to={`/user/${r.userId}`} className="review-author">{r.userDisplayName}</Link>
+                  </button>
+                  <button type="button" className="review-author-btn review-author"
+                    onClick={(e) => openCard(r, e.currentTarget)} title="Показать профиль">
+                    {r.userDisplayName}
+                  </button>
                   <span className="review-rating">★ {r.rating}/10</span>
                   <span className="review-date">{formatDate(r.updatedAt)}</span>
                   <ReviewActions
@@ -199,6 +214,8 @@ export default function ReviewSection({ drinkId, showSummary = true, onChanged, 
         )}
       </div>
 
+      {cardTarget && <UserCard {...cardTarget} onClose={closeCard} />}
+
       {banTarget && (
         <BanModal user={banTarget} onClose={() => setBanTarget(null)}
           onDone={() => { setBanTarget(null); load(); }} />
@@ -209,7 +226,7 @@ export default function ReviewSection({ drinkId, showSummary = true, onChanged, 
 
 /**
  * Меню «⋮» справа сверху отзыва: все действия в одном месте — для любого авторизованного
- * «Поделиться карточкой» и «Поделиться отзывом», для админа — модерация (предупредить/забанить/удалить).
+ * «Поделиться» (отзывом), для админа — модерация (предупредить/забанить/удалить).
  */
 function ReviewActions({ review, isAdmin, onWarn, onBan, onDelete }) {
   const [open, setOpen] = useState(false);
@@ -240,30 +257,24 @@ function ReviewActions({ review, isAdmin, onWarn, onBan, onDelete }) {
       {open && (
         <div className="share-menu">
           {authed && (
-            <>
-              <button type="button" className="share-menu-item"
-                onClick={() => { setOpen(false); setShareTarget({ drinkId: review.drinkId }); }}>
-                <span aria-hidden>🥤</span> Поделиться карточкой
-              </button>
-              <button type="button" className="share-menu-item"
-                onClick={() => { setOpen(false); setShareTarget({ reviewId: review.id }); }}>
-                <span aria-hidden>↗</span> Поделиться отзывом
-              </button>
-            </>
+            <button type="button" className="share-menu-item"
+              onClick={() => { setOpen(false); setShareTarget({ reviewId: review.id }); }}>
+              <ShareIcon size={15} /> Поделиться
+            </button>
           )}
           {adminActions && (
             <>
               <button type="button" className="share-menu-item"
                 onClick={() => { setOpen(false); onWarn(review); }}>
-                <span aria-hidden>⚠</span> Предупредить
+                <WarnIcon size={15} /> Предупредить
               </button>
               <button type="button" className="share-menu-item"
                 onClick={() => { setOpen(false); onBan(review); }}>
-                <span aria-hidden>🔨</span> Забанить
+                <HammerIcon size={15} /> Забанить
               </button>
               <button type="button" className="share-menu-item danger"
                 onClick={() => { setOpen(false); onDelete(review.id); }}>
-                <span aria-hidden>×</span> Удалить отзыв
+                <TrashIcon size={15} /> Удалить отзыв
               </button>
             </>
           )}

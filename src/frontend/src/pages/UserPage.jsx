@@ -10,6 +10,7 @@ import {
   deleteReviewAsAdmin, warnUser, mediaUrl,
 } from "../services/api";
 import BannerLayer, { framingOf } from "../components/BannerLayer";
+import { WarnIcon, HammerIcon, LockIcon, TrophyIcon } from "../components/icons";
 
 export default function UserPage() {
   const { id } = useParams();
@@ -78,20 +79,20 @@ export default function UserPage() {
 
               {canModerate && (
                 <div className="row" style={{ marginTop: 16 }}>
-                  <button className="btn btn-secondary btn-sm" onClick={handleWarn}>⚠ Предупредить</button>
-                  <button className="btn btn-danger btn-sm" onClick={() => setBanTarget(data.user)}>🔨 Забанить</button>
+                  <button className="btn btn-secondary btn-sm" onClick={handleWarn}><WarnIcon size={15} /> Предупредить</button>
+                  <button className="btn btn-danger btn-sm" onClick={() => setBanTarget(data.user)}><HammerIcon size={15} /> Забанить</button>
                 </div>
               )}
             </div>
 
             {!data.canSeeReviews ? (
               <div className="card">
-                <div className="state" style={{ padding: 30 }}>🔒 Этот профиль закрыт.</div>
+                <div className="state" style={{ padding: 30 }}><LockIcon size={15} /> Этот профиль закрыт.</div>
               </div>
             ) : (
               <>
                 <div className="card">
-                  <div className="card-title">🏆 Тир-лист</div>
+                  <div className="card-title"><TrophyIcon /> Тир-лист</div>
                   <TierList reviews={data.reviews} />
                 </div>
 

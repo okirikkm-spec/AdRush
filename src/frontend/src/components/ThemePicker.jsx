@@ -3,16 +3,7 @@ import { useTheme } from "../ThemeContext";
 import { isLightBg } from "../theme/palette";
 import { isAuthenticated } from "../services/api";
 import { ShareModal } from "./ShareControl";
-
-function PaletteIcon() {
-  return (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="13.5" cy="6.5" r="1.4" /><circle cx="17.5" cy="10.5" r="1.4" />
-      <circle cx="8.5" cy="7.5" r="1.4" /><circle cx="6.5" cy="12.5" r="1.4" />
-      <path d="M12 2a10 10 0 0 0 0 20c1.7 0 2.5-1.3 2-2.7-.4-1.1.4-2.3 1.6-2.3H18a4 4 0 0 0 4-4 10 10 0 0 0-10-11z" />
-    </svg>
-  );
-}
+import { PaletteIcon, ShareIcon } from "./icons";
 
 function Check() {
   return (
@@ -84,7 +75,7 @@ export default function ThemePicker() {
         aria-label="Оформление"
         aria-expanded={open}
       >
-        <PaletteIcon />
+        <PaletteIcon size={17} />
       </button>
 
       {open && (
@@ -170,7 +161,7 @@ export default function ThemePicker() {
               {isAuthenticated() && (
                 <button type="button" className="btn btn-secondary btn-sm"
                   onClick={() => { setOpen(false); setShareOpen(true); }}>
-                  ↗ Поделиться
+                  <ShareIcon size={14} /> Поделиться
                 </button>
               )}
             </div>

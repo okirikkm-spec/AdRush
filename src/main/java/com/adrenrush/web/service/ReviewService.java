@@ -1,6 +1,7 @@
 package com.adrenrush.web.service;
 
 import com.adrenrush.web.dto.ReviewResponseDto;
+import com.adrenrush.web.dto.UserCardDto;
 import com.adrenrush.web.entity.Drink;
 import com.adrenrush.web.entity.Review;
 import com.adrenrush.web.entity.ReviewReaction;
@@ -47,6 +48,29 @@ public class ReviewService {
         return reviews.stream()
             .map(r -> ReviewResponseDto.from(r, currentUserId, byReview.getOrDefault(r.getId(), List.of())))
             .toList();
+    }
+
+    /**
+     * Сводка активности пользователя для карточки мини-профиля: считается запросами
+     * с агрегатами, отзывы целиком не поднимаются (карточка открывается по клику
+     * в списке отзывов, где их может быть много).
+     */
+    @Transactional(readOnly = true)
+    public UserCardDto.Stats getUserStats(Long userId) {
+        Double avg = reviewRepository.getAverageByUserId(userId);
+        Review top = reviewRepository.findFirstByUserIdOrderByRatingDescUpdatedAtDesc(userId).orElse(null);
+        Instant lastAt = reviewRepository.findFirstByUserIdOrderByUpdatedAtDesc(userId)
+            .map(Review::getUpdatedAt)
+            .orElse(null);
+        return new UserCardDto.Stats(
+            reviewRepository.countByUserId(userId),
+            avg != null ? Math.round(avg * 10.0) / 10.0 : null,
+            reactionRepository.countReceivedByUserId(userId),
+            lastAt,
+            top != null ? top.getDrink().getId() : null,
+            top != null ? top.getDrink().getName() : null,
+            top != null ? top.getRating() : null
+        );
     }
 
     /** Пакетно загружает реакции для списка отзывов и группирует их по id отзыва. */

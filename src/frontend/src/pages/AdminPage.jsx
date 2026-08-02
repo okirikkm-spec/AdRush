@@ -5,6 +5,7 @@ import ImageDropZone from "../components/ImageDropZone";
 import UserModeration from "../components/UserModeration";
 import AuditLog from "../components/AuditLog";
 import ParseStagingModal from "../components/ParseStagingModal";
+import { BoxIcon, UsersIcon, ClipboardIcon, PlusIcon, RefreshIcon, ImageIcon } from "../components/icons";
 import {
   fetchMe, createDrink, fetchParseCandidates, addDrinkPhoto, addDrinkPhotoByUrl, optimizeMedia,
 } from "../services/api";
@@ -41,18 +42,22 @@ export default function AdminPage() {
 
         <div className="admin-tabs" role="tablist">
           <button className={`admin-tab ${tab === "catalog" ? "active" : ""}`}
-            onClick={() => setTab("catalog")}>📦 Каталог</button>
+            onClick={() => setTab("catalog")}><BoxIcon /> Каталог</button>
           <button className={`admin-tab ${tab === "users" ? "active" : ""}`}
-            onClick={() => setTab("users")}>👥 Пользователи</button>
+            onClick={() => setTab("users")}><UsersIcon /> Пользователи</button>
           <button className={`admin-tab ${tab === "audit" ? "active" : ""}`}
-            onClick={() => setTab("audit")}>📋 Журнал аудита</button>
+            onClick={() => setTab("audit")}><ClipboardIcon /> Журнал аудита</button>
         </div>
 
         {tab === "catalog" && (
           <div className="admin-cards">
             <AddDrinkCard onCreated={(d) => navigate(`/drink/${d.id}`)} />
-            <ParserCard />
-            <MediaOptimizeCard />
+            {/* Оптимизация идёт прямо под парсингом: она обслуживает те же
+                картинки, что приходят из каталогов */}
+            <div className="admin-col">
+              <ParserCard />
+              <MediaOptimizeCard />
+            </div>
           </div>
         )}
         {tab === "users" && <UserModeration />}
@@ -88,7 +93,7 @@ function AddDrinkCard({ onCreated }) {
 
   return (
     <div className="card">
-      <div className="card-title">➕ Добавить энергетик</div>
+      <div className="card-title"><PlusIcon /> Добавить энергетик</div>
       <div className="input-group">
         <label className="input-label">Название</label>
         <input className="input" value={name} onChange={(e) => setName(e.target.value)}
@@ -128,7 +133,7 @@ function ParserCard() {
 
   return (
     <div className="card">
-      <div className="card-title">🔄 Парсинг каталогов</div>
+      <div className="card-title"><RefreshIcon /> Парсинг каталогов</div>
       <div className="badge-info" style={{ marginBottom: 14 }}>
         Каталоги проверяются раз в сутки, но карточки сами не создаются: найденное ждёт в приёмке.
         Откройте её, отметьте нужные напитки (названия можно поправить на месте) и добавьте в каталог.
@@ -164,7 +169,7 @@ function MediaOptimizeCard() {
 
   return (
     <div className="card">
-      <div className="card-title">🖼️ Оптимизация изображений</div>
+      <div className="card-title"><ImageIcon /> Оптимизация изображений</div>
       <div className="badge-info" style={{ marginBottom: 14 }}>
         Скачивает внешние картинки в наше хранилище, создаёт лёгкие превью и вырезает белый фон
         у обложек из каталогов (у уже скачанных — задним числом). Внешние ссылки за Cloudflare/CDN

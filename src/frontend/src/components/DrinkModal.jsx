@@ -6,6 +6,7 @@ import PhotoGallery from "./PhotoGallery";
 import ReviewSection from "./ReviewSection";
 import CoverFramerModal from "./CoverFramerModal";
 import ShareControl from "./ShareControl";
+import { BoltIcon, ImageIcon } from "./icons";
 
 function ratingWord(n) {
   const a = n % 100, b = n % 10;
@@ -192,7 +193,7 @@ export default function DrinkModal({ drinkId, summary, highlightReviewId, onClos
                 <button className="btn btn-primary btn-sm" onClick={saveInfo} disabled={saving}>
                   {saving ? "…" : "Сохранить"}
                 </button>
-                <button className="btn btn-secondary btn-sm" onClick={() => setFraming(true)}>🖼️ Кадрирование</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => setFraming(true)}><ImageIcon size={15} /> Кадрирование</button>
                 <button className="btn btn-danger btn-sm" onClick={handleDelete}>Удалить</button>
                 <button className="btn btn-ghost btn-sm" onClick={() => { setEditing(false); setError(null); }}>Готово</button>
               </div>
@@ -227,7 +228,7 @@ export default function DrinkModal({ drinkId, summary, highlightReviewId, onClos
                     style={coverStyle(drink?.coverFitModal, drink?.coverPosModal)} decoding="async" />
                 </div>
               ) : (
-                <div className="drink-hero-empty">⚡</div>
+                <div className="drink-hero-empty"><BoltIcon size={64} /></div>
               )}
               {photos.length > 1 && (
                 <>

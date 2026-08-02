@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { mediaUrl, updateCoverFraming } from "../services/api";
 import { coverStyle, posX, posY } from "../utils/coverStyle";
+import { BoltIcon, ImageIcon } from "./icons";
 
 /** Один редактор кадра (карточка или окно): превью + переключатель режима + перетаскивание фокуса. */
 function FrameEditor({ title, url, frameClass, fit, pos, onFit, onPos }) {
@@ -33,7 +34,7 @@ function FrameEditor({ title, url, frameClass, fit, pos, onFit, onPos }) {
       >
         {url
           ? <img src={url} alt="" draggable={false} style={coverStyle(fit, pos)} />
-          : <div className="framer-empty">⚡</div>}
+          : <div className="framer-empty"><BoltIcon size={28} /></div>}
         {fit === "cover" && url && (
           <span className="framer-focal" style={{ left: posX(pos), top: posY(pos) }} />
         )}
@@ -91,7 +92,7 @@ export default function CoverFramerModal({ drink, onClose, onSaved }) {
       <div className="modal modal-picker modal-framer" onMouseDown={(e) => e.stopPropagation()} role="dialog">
         <div className="picker-head">
           <div className="picker-head-main">
-            <span className="picker-icon">🖼️</span>
+            <span className="picker-icon"><ImageIcon size={20} /></span>
             <div>
               <h2 className="picker-title">Кадрирование обложки</h2>
               <p className="picker-sub">Настройте ракурс для карточки и окна отдельно</p>

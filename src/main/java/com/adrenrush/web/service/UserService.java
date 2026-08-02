@@ -1,6 +1,7 @@
 package com.adrenrush.web.service;
 
 import com.adrenrush.web.dto.ReviewResponseDto;
+import com.adrenrush.web.dto.UserCardDto;
 import com.adrenrush.web.dto.UserResponseDto;
 import com.adrenrush.web.entity.User;
 import com.adrenrush.web.enums.RoleEnum;
@@ -216,5 +217,24 @@ public class UserService {
             result.put("reviews", List.of());
         }
         return result;
+    }
+
+    /**
+     * Карточка для всплывающего мини-профиля: то же, что в шапке страницы профиля,
+     * плюс сводка активности. У закрытого профиля статистика не заполняется —
+     * посторонний видит только имя, обложку и дату регистрации.
+     */
+    @Transactional(readOnly = true)
+    public UserCardDto getUserCard(Long userId, User currentUser) {
+        User target = userRepository.findById(userId)
+            .orElseThrow(() -> ApiException.notFound("Пользователь не найден"));
+
+        UserCardDto dto = UserCardDto.from(target);
+        boolean isSelf = currentUser != null && currentUser.getId().equals(target.getId());
+        boolean isAdmin = currentUser != null && currentUser.getRole() == RoleEnum.ADMIN;
+        if (!target.isProfilePrivate() || isSelf || isAdmin) {
+            dto.setStats(reviewService.getUserStats(target.getId()));
+        }
+        return dto;
     }
 }

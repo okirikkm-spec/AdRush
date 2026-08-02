@@ -1,19 +1,23 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchAuditLog, fetchAuditActors } from "../services/api";
+import {
+  ClipboardIcon, HammerIcon, CheckIcon, TrashIcon, CloseIcon, WarnIcon,
+  StarIcon, ArrowDownIcon, PlusIcon, EditIcon,
+} from "./icons";
 
 // Метки типов действий + визуальный стиль бейджа
 const ACTIONS = {
-  BAN:           { label: "Бан",                icon: "🔨", cls: "audit-act-ban" },
-  UNBAN:         { label: "Снятие бана",        icon: "✅", cls: "audit-act-unban" },
-  DELETE_USER:   { label: "Удаление аккаунта",  icon: "🗑", cls: "audit-act-del" },
-  DELETE_REVIEW: { label: "Удаление отзыва",    icon: "✖",  cls: "audit-act-del" },
-  WARN:          { label: "Предупреждение",     icon: "⚠",  cls: "audit-act-warn" },
-  GRANT_ADMIN:   { label: "Выдача админки",     icon: "⭐", cls: "audit-act-role" },
-  REVOKE_ADMIN:  { label: "Снятие админки",     icon: "↓",  cls: "audit-act-role" },
-  DRINK_CREATE:  { label: "Карточка создана",   icon: "➕", cls: "audit-act-drink" },
-  DRINK_UPDATE:  { label: "Карточка изменена",  icon: "✏",  cls: "audit-act-drink" },
-  DRINK_DELETE:  { label: "Карточка удалена",   icon: "🗑", cls: "audit-act-del" },
+  BAN:           { label: "Бан",                Icon: HammerIcon,    cls: "audit-act-ban" },
+  UNBAN:         { label: "Снятие бана",        Icon: CheckIcon,     cls: "audit-act-unban" },
+  DELETE_USER:   { label: "Удаление аккаунта",  Icon: TrashIcon,     cls: "audit-act-del" },
+  DELETE_REVIEW: { label: "Удаление отзыва",    Icon: CloseIcon,     cls: "audit-act-del" },
+  WARN:          { label: "Предупреждение",     Icon: WarnIcon,      cls: "audit-act-warn" },
+  GRANT_ADMIN:   { label: "Выдача админки",     Icon: StarIcon,      cls: "audit-act-role" },
+  REVOKE_ADMIN:  { label: "Снятие админки",     Icon: ArrowDownIcon, cls: "audit-act-role" },
+  DRINK_CREATE:  { label: "Карточка создана",   Icon: PlusIcon,      cls: "audit-act-drink" },
+  DRINK_UPDATE:  { label: "Карточка изменена",  Icon: EditIcon,      cls: "audit-act-drink" },
+  DRINK_DELETE:  { label: "Карточка удалена",   Icon: TrashIcon,     cls: "audit-act-del" },
 };
 
 function fmt(iso) {
@@ -60,7 +64,7 @@ export default function AuditLog() {
 
   return (
     <div className="card">
-      <div className="card-title">🧾 Журнал аудита</div>
+      <div className="card-title"><ClipboardIcon /> Журнал аудита</div>
       <div className="badge-info" style={{ marginBottom: 14 }}>
         Все действия модераторов — кто, что и с кем. Записи неизменяемы и сохраняются даже после удаления пользователя.
       </div>
@@ -97,13 +101,15 @@ export default function AuditLog() {
       ) : (
         <div className="audit-list">
           {data.items.map((it) => {
-            const a = ACTIONS[it.action] || { label: it.action, icon: "•", cls: "" };
+            const a = ACTIONS[it.action] || { label: it.action, Icon: null, cls: "" };
             return (
               <div className="audit-row" key={it.id}>
                 <div className="audit-when">{fmt(it.createdAt)}</div>
                 <div className="audit-main">
                   <div className="audit-line">
-                    <span className={`audit-badge ${a.cls}`}>{a.icon} {a.label}</span>
+                    <span className={`audit-badge ${a.cls}`}>
+                      {a.Icon && <a.Icon size={12} />}{a.label}
+                    </span>
                     <span className="audit-who">
                       {it.actorId
                         ? <Link to={`/user/${it.actorId}`}>{it.actorUsername}</Link>

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Avatar from "./Avatar";
-import BannerLayer from "./BannerLayer";
+import BannerLayer, { HERO_ASPECT } from "./BannerLayer";
 import { ImageIcon } from "./icons";
 
 const SCALE_MIN = 0.2, SCALE_MAX = 5, OFFSET_LIMIT = 200;
@@ -16,7 +16,7 @@ const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 export default function BannerFramerModal({ me, url, framing, aspect, onApply, onRemove, onClose }) {
   // Пропорции настоящей карточки: и предпросмотр, и рамка обязаны им следовать,
   // иначе «покрытие» даст другой кадр и предпросмотр соврёт.
-  const ratio = aspect && aspect > 0 ? aspect : 7;
+  const ratio = aspect && aspect > 0 ? aspect : HERO_ASPECT;
   const boxRatio = { aspectRatio: String(ratio) };
   const [scale, setScale] = useState(framing.scale);
   const [rotate, setRotate] = useState(framing.rotate);

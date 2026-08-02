@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { searchChatUsers, shareToChat, isAuthenticated } from "../services/api";
 import { useChat } from "../ChatContext";
 import Avatar from "./Avatar";
+import { ShareIcon, CheckIcon } from "./icons";
 
 /**
  * Кнопка «⋮» → «Поделиться» для карточки энергетика или отзыва.
@@ -41,7 +42,7 @@ export default function ShareControl({ drinkId, reviewId, className = "" }) {
         <div className="share-menu">
           <button type="button" className="share-menu-item"
             onClick={(e) => swallow(e, () => { setMenuOpen(false); setShareOpen(true); })}>
-            <span aria-hidden>↗</span> Поделиться
+            <ShareIcon size={15} /> Поделиться
           </button>
         </div>
       )}
@@ -100,7 +101,7 @@ export function ShareModal({ drinkId, reviewId, theme, onClose }) {
       <div className="modal modal-picker" onMouseDown={stop} onClick={stop}>
         <div className="picker-head">
           <div className="picker-head-main">
-            <div className="picker-icon">↗</div>
+            <div className="picker-icon"><ShareIcon size={20} /></div>
             <div>
               <div className="picker-title">Поделиться</div>
               <div className="picker-sub">{theme ? "Тема оформления" : reviewId ? "Отзыв" : "Карточка энергетика"}</div>
@@ -112,7 +113,7 @@ export function ShareModal({ drinkId, reviewId, theme, onClose }) {
         <div className="picker-body">
           {done ? (
             <div className="share-done">
-              <div className="share-done-icon">✓</div>
+              <div className="share-done-icon"><CheckIcon size={26} /></div>
               <div className="share-done-text">Отправлено{done.name ? ` · ${done.name}` : ""}</div>
               <div className="row" style={{ justifyContent: "center", marginTop: 14 }}>
                 <button className="btn btn-secondary btn-sm" onClick={onClose}>Закрыть</button>

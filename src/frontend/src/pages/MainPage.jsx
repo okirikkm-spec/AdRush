@@ -4,6 +4,7 @@ import Navbar from "../components/Navbar";
 import DrinkCard from "../components/DrinkCard";
 import DrinkModal from "../components/DrinkModal";
 import BrandFilter from "../components/BrandFilter";
+import { BoltIcon } from "../components/icons";
 import { fetchDrinks } from "../services/api";
 
 export default function MainPage() {
@@ -87,7 +88,7 @@ export default function MainPage() {
       <Navbar />
       <div className="page">
         <div className="page-head" style={{ marginBottom: 24 }}>
-          <h1 className="page-title">⚡ Рейтинг энергетиков</h1>
+          <h1 className="page-title"><BoltIcon size={24} /> Рейтинг энергетиков</h1>
           {brands.length > 0 && (
             <BrandFilter
               brands={brands}

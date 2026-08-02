@@ -6,6 +6,7 @@ import Avatar from "./Avatar";
 import BrandText from "./BrandText";
 import ThemePicker from "./ThemePicker";
 import DrinkSearch from "./DrinkSearch";
+import { LogoutIcon, WrenchIcon } from "./icons";
 
 function Bolt() {
   return (
@@ -114,7 +115,7 @@ export default function Navbar() {
           <div className="navbar-menu" role="menu">
             {authed ? (
               <button className="navbar-menu-item danger" onClick={() => { setMenuOpen(false); handleLogout(); }}>
-                <span aria-hidden>⎋</span> Выйти
+                <LogoutIcon /> Выйти
               </button>
             ) : (
               <>
@@ -125,7 +126,7 @@ export default function Navbar() {
 
             {isAdmin && (
               <Link className="navbar-menu-item" to="/admin" onClick={() => setMenuOpen(false)}>
-                <span aria-hidden>🛠</span> Админка
+                <WrenchIcon /> Админка
               </Link>
             )}
           </div>

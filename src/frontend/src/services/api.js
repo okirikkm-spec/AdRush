@@ -289,6 +289,13 @@ export function reactToReview(reviewId, emoji) {
 export function fetchUserProfile(id) {
   return jsonRequest(`/api/users/${id}`, { auth: true });
 }
+/**
+ * Карточка мини-профиля (имя, обложка, дата регистрации, сводка активности).
+ * У закрытого профиля stats = null для всех, кроме владельца и админа.
+ */
+export function fetchUserCard(id) {
+  return jsonRequest(`/api/users/${id}/card`, { auth: true });
+}
 
 /* ─────────────── Модерация (админ) ─────────────── */
 

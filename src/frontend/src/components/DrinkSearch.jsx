@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchDrinks, mediaUrl } from "../services/api";
 import { coverStyle } from "../utils/coverStyle";
-import { SearchIcon, CloseIcon } from "./icons";
+import { SearchIcon, CloseIcon, BoltIcon } from "./icons";
 
 const MAX_RESULTS = 8;
 
@@ -133,7 +133,7 @@ export default function DrinkSearch() {
                         style={coverStyle(drink.coverFitCard, drink.coverPosCard)}
                       />
                     ) : (
-                      <div className="navbar-search-thumb navbar-search-thumb-placeholder">⚡</div>
+                      <div className="navbar-search-thumb navbar-search-thumb-placeholder"><BoltIcon size={17} /></div>
                     )}
                     <span className="navbar-search-item-body">
                       <span className="navbar-search-item-name">{drink.name}</span>

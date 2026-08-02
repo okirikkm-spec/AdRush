@@ -1,5 +1,6 @@
 import { mediaUrl } from "../services/api";
 import { coverStyle } from "../utils/coverStyle";
+import { BoltIcon } from "./icons";
 
 const SCORES = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
 
@@ -57,7 +58,7 @@ export default function DrinkCard({ drink, rank, onClick, ratingOpen, onRatingTo
         <img className="drink-thumb" src={cover} alt={drink.name} loading="lazy" decoding="async"
           style={coverStyle(drink.coverFitCard, drink.coverPosCard)} />
       ) : (
-        <div className="drink-thumb drink-thumb-placeholder">⚡</div>
+        <div className="drink-thumb drink-thumb-placeholder"><BoltIcon size={28} /></div>
       )}
 
       <div className="drink-card-body">

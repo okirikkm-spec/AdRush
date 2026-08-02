@@ -2,9 +2,14 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Avatar from "../components/Avatar";
+import BannerLayer, { framingOf, HERO_ASPECT } from "../components/BannerLayer";
 import { useChat } from "../ChatContext";
 import { useTheme } from "../ThemeContext";
 import { searchChatUsers, mediaUrl } from "../services/api";
+import {
+  BoltIcon, CameraIcon, CupIcon, CommentIcon, PaletteIcon,
+  UsersIcon, BellIcon, CheckIcon,
+} from "../components/icons";
 
 /* ─────────────── helpers ─────────────── */
 
@@ -41,10 +46,10 @@ const fmtDay = (iso) => {
 /** Короткое превью сообщения для списка бесед (картинки/карточки без текста). */
 const msgPreview = (m) => {
   if (!m) return "";
-  if (m.imageUrl) return "📷 Фото";
-  if (m.sharedDrink) return `🥤 ${m.sharedDrink.name}`;
-  if (m.sharedReview) return `💬 Отзыв · ${m.sharedReview.drinkName || ""}`;
-  if (m.sharedTheme) return `🎨 Тема · ${m.sharedTheme.name || "оформление"}`;
+  if (m.imageUrl) return <><CameraIcon size={13} />Фото</>;
+  if (m.sharedDrink) return <><CupIcon size={13} />{m.sharedDrink.name}</>;
+  if (m.sharedReview) return <><CommentIcon size={13} />Отзыв · {m.sharedReview.drinkName || ""}</>;
+  if (m.sharedTheme) return <><PaletteIcon size={13} />Тема · {m.sharedTheme.name || "оформление"}</>;
   return m.content;
 };
 
@@ -54,7 +59,7 @@ function SharedDrink({ drink }) {
     <Link to={`/drink/${drink.id}`} className="chat-card chat-card-drink">
       {drink.coverUrl
         ? <img className="chat-card-cover" src={mediaUrl(drink.coverUrl)} alt="" loading="lazy" />
-        : <div className="chat-card-cover chat-card-cover-empty">⚡</div>}
+        : <div className="chat-card-cover chat-card-cover-empty"><BoltIcon size={24} /></div>}
       <div className="chat-card-info">
         <div className="chat-card-title">{drink.name}</div>
         {drink.brand && <div className="chat-card-sub">{drink.brand}</div>}
@@ -109,7 +114,7 @@ function SharedTheme({ theme }) {
           <span className="chat-theme-dot" style={{ background: theme.accent }} />
         </div>
         <div className="chat-card-info">
-          <div className="chat-card-title">🎨 {theme.name || "Тема оформления"}</div>
+          <div className="chat-card-title"><PaletteIcon size={14} />{theme.name || "Тема оформления"}</div>
           <div className="chat-card-sub">{previewing ? "Это предпросмотр — пролистайте сайт" : "Акцент, фон и скругление"}</div>
         </div>
       </div>
@@ -120,10 +125,29 @@ function SharedTheme({ theme }) {
         </button>
         <button type="button" className="btn btn-primary btn-sm"
           onClick={apply} disabled={applied}>
-          {applied ? "Применено ✓" : "Применить"}
+          {applied ? <><CheckIcon size={13} /> Применено</> : "Применить"}
         </button>
       </div>
     </div>
+  );
+}
+
+/* ─────────────── Пользователь в списке ─────────────── */
+
+/**
+ * Строка пользователя (поиск, участники группы) с обложкой профиля на фоне —
+ * тот же кадр, что и в мини-профиле (refAspect: строка площе карточки).
+ */
+function UserRow({ user, name, login, onClick }) {
+  return (
+    <button type="button" className={"chat-user-row" + (user.bannerUrl ? " has-banner" : "")} onClick={onClick}>
+      <BannerLayer url={mediaUrl(user.bannerUrl)} {...framingOf(user)} refAspect={HERO_ASPECT} />
+      <Avatar url={user.avatarUrl} name={user.displayName} size={34} />
+      <div className="chat-user-info">
+        <div className="chat-user-name">{name ?? user.displayName}</div>
+        <div className="chat-user-login">{login ?? `@${user.username}`}</div>
+      </div>
+    </button>
   );
 }
 
@@ -153,13 +177,7 @@ function UserSearch({ exclude = [], onPick, placeholder = "Поиск по ло�
         {loading && <div className="chat-empty-sm">Поиск…</div>}
         {!loading && q.trim() && results.length === 0 && <div className="chat-empty-sm">Никого не найдено</div>}
         {results.map((u) => (
-          <button key={u.id} type="button" className="chat-user-row" onClick={() => onPick(u)}>
-            <Avatar url={u.avatarUrl} name={u.displayName} size={34} />
-            <div className="chat-user-info">
-              <div className="chat-user-name">{u.displayName}</div>
-              <div className="chat-user-login">@{u.username}</div>
-            </div>
-          </button>
+          <UserRow key={u.id} user={u} onClick={() => onPick(u)} />
         ))}
       </div>
     </div>
@@ -334,7 +352,7 @@ function MembersModal({ conv, meId, onClose }) {
       <div className="modal modal-picker" onClick={(e) => e.stopPropagation()}>
         <div className="picker-head">
           <div className="picker-head-main">
-            <div className="picker-icon">👥</div>
+            <div className="picker-icon"><UsersIcon size={20} /></div>
             <div>
               <div className="picker-title">{conv.title || "Группа"}</div>
               <div className="picker-sub">{members.length} участников</div>
@@ -347,7 +365,7 @@ function MembersModal({ conv, meId, onClose }) {
             <button type="button" className="group-avatar-edit" onClick={() => fileRef.current?.click()}
               disabled={busy} title="Сменить фото группы">
               <Avatar url={conv.avatarUrl} name={conv.title || "Группа"} size={64} />
-              <span className="group-avatar-cam" aria-hidden>📷</span>
+              <span className="group-avatar-cam" aria-hidden><CameraIcon size={12} /></span>
             </button>
             <input ref={fileRef} type="file" accept="image/*" hidden onChange={onPickAvatar} />
             <div className="group-rename">
@@ -359,14 +377,10 @@ function MembersModal({ conv, meId, onClose }) {
           </div>
           <div className="chat-search-results">
             {members.map((m) => (
-              <button key={m.user.id} type="button" className="chat-user-row"
-                onClick={() => navigate(`/user/${m.user.id}`)}>
-                <Avatar url={m.user.avatarUrl} name={m.user.displayName} size={34} />
-                <div className="chat-user-info">
-                  <div className="chat-user-name">{m.user.displayName}{m.user.id === meId ? " (вы)" : ""}</div>
-                  <div className="chat-user-login">@{m.user.username}{m.owner ? " · владелец" : ""}</div>
-                </div>
-              </button>
+              <UserRow key={m.user.id} user={m.user}
+                name={m.user.displayName + (m.user.id === meId ? " (вы)" : "")}
+                login={`@${m.user.username}${m.owner ? " · владелец" : ""}`}
+                onClick={() => navigate(`/user/${m.user.id}`)} />
             ))}
           </div>
         </div>
@@ -401,7 +415,7 @@ function ConvList({ activeId, onSelect, meId, onNew }) {
                 <div className="chat-conv-bottom">
                   <span className="chat-conv-preview">
                     {c.lastMessage
-                      ? (c.type === "GROUP" ? `${c.lastMessage.sender.displayName}: ` : "") + msgPreview(c.lastMessage)
+                      ? <>{c.type === "GROUP" ? `${c.lastMessage.sender.displayName}: ` : ""}{msgPreview(c.lastMessage)}</>
                       : (c.type === "GROUP" ? "Группа создана" : "Нет сообщений")}
                   </span>
                   {c.unreadCount > 0 && <span className="chat-unread">{c.unreadCount > 99 ? "99+" : c.unreadCount}</span>}
@@ -475,10 +489,15 @@ function ConvView({ conv, meId, onBack }) {
 
   const typers = Object.values(typing[conv.id] || {}).map((t) => t.name);
 
+  // обложка собеседника фоном шапки — в группе общей обложки нет
+  const headUser = conv.type === "GROUP" ? null : otherMember(conv, meId)?.user;
+
   let lastDay = null;
   return (
     <section className="chat-main">
-      <header className="chat-main-head">
+      <header className={"chat-main-head" + (headUser?.bannerUrl ? " has-banner" : "")}>
+        {/* refAspect: шапка вдвое площе карточки профиля — кадр считаем по её пропорции */}
+        <BannerLayer url={mediaUrl(headUser?.bannerUrl)} {...framingOf(headUser)} refAspect={HERO_ASPECT} />
         <button className="btn-icon chat-back" onClick={onBack} aria-label="Назад">‹</button>
         <button type="button" className="chat-main-head-card" onClick={openTitle}
           title={conv.type === "GROUP" ? "Участники группы" : "Открыть профиль"}>
@@ -544,7 +563,7 @@ function ConvView({ conv, meId, onBack }) {
       </div>
 
       {systemConv ? (
-        <div className="chat-readonly">🔔 Системные уведомления — отвечать нельзя</div>
+        <div className="chat-readonly"><BellIcon size={15} /> Системные уведомления — отвечать нельзя</div>
       ) : (
         <>
           <div className="chat-typing-line">{typers.length > 0 && `${typers.join(", ")} печатает…`}</div>

@@ -6,6 +6,7 @@ import {
 } from "../services/api";
 import Avatar from "./Avatar";
 import BanModal from "./BanModal";
+import { ShieldIcon } from "./icons";
 
 function fmtDate(iso) {
   if (!iso) return "";
@@ -93,7 +94,7 @@ export default function UserModeration() {
 
   return (
     <div className="card">
-      <div className="card-title">🛡️ Пользователи и модерация</div>
+      <div className="card-title"><ShieldIcon /> Пользователи и модерация</div>
 
       <input className="input" placeholder="Поиск по логину, имени или IP…"
         value={query} onChange={(e) => setQuery(e.target.value)} style={{ marginBottom: 14 }} />

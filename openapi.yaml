@@ -425,6 +425,29 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /api/users/{id}/card:
+    get:
+      tags: [Users]
+      summary: Карточка мини-профиля
+      description: >
+        Имя, обложка с кадрированием, дата регистрации и сводка активности —
+        всплывает по клику на автора отзыва. У закрытого профиля `stats` = null
+        для всех, кроме владельца и администратора.
+      security:
+        - bearerAuth: []
+        - {}
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: Карточка пользователя
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserCardDto'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   # ────────────────────────────── DRINKS ────────────────────────────
   /api/drinks:
     get:
@@ -1633,6 +1656,27 @@ components:
         system:
           type: boolean
           description: Служебный аккаунт «Система» (беседа становится read-only)
+        bannerUrl:
+          type: string
+          nullable: true
+          description: >-
+            Обложка профиля. Заполняется у участников беседы и в поиске собеседников;
+            у отправителя сообщения (ChatMessageDto.sender) — null.
+        bannerScale:
+          type: number
+          format: double
+          nullable: true
+        bannerRotate:
+          type: integer
+          nullable: true
+        bannerOffsetX:
+          type: number
+          format: double
+          nullable: true
+        bannerOffsetY:
+          type: number
+          format: double
+          nullable: true
 
     AdminUserDto:
       type: object
@@ -1672,6 +1716,83 @@ components:
           type: integer
         superAdmin:
           type: boolean
+
+    UserCardDto:
+      type: object
+      description: Карточка для всплывающего мини-профиля (клик по автору отзыва)
+      properties:
+        id:
+          type: integer
+          format: int64
+        username:
+          type: string
+        displayName:
+          type: string
+        role:
+          $ref: '#/components/schemas/RoleEnum'
+        avatarUrl:
+          type: string
+          nullable: true
+        bannerUrl:
+          type: string
+          nullable: true
+          description: Обложка профиля; кадрируется теми же полями, что и в профиле
+        bannerScale:
+          type: number
+          format: double
+          nullable: true
+        bannerRotate:
+          type: integer
+          nullable: true
+        bannerOffsetX:
+          type: number
+          format: double
+          nullable: true
+        bannerOffsetY:
+          type: number
+          format: double
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+          description: Дата регистрации
+        profilePrivate:
+          type: boolean
+        stats:
+          allOf:
+            - $ref: '#/components/schemas/UserCardStats'
+          nullable: true
+          description: null — профиль закрыт от этого зрителя
+
+    UserCardStats:
+      type: object
+      description: Сводка активности пользователя
+      properties:
+        reviewCount:
+          type: integer
+        averageRating:
+          type: number
+          format: double
+          nullable: true
+          description: Средняя выставленная оценка (null — отзывов нет)
+        reactionsReceived:
+          type: integer
+          description: Сколько реакций собрали отзывы пользователя
+        lastReviewAt:
+          type: string
+          format: date-time
+          nullable: true
+        topDrinkId:
+          type: integer
+          format: int64
+          nullable: true
+          description: Самый высоко оценённый энергетик (при равных оценках — оценённый позже)
+        topDrinkName:
+          type: string
+          nullable: true
+        topDrinkRating:
+          type: integer
+          nullable: true
 
     PublicProfile:
       type: object

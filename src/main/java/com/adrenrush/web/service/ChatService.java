@@ -85,7 +85,7 @@ public class ChatService {
             .filter(u -> !u.isSystem())
             .filter(u -> !banService.isBanned(u))
             .limit(20)
-            .map(UserBriefDto::from)
+            .map(UserBriefDto::fromWithBanner)
             .toList();
     }
 

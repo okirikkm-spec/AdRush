@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { mediaUrl, addDrinkPhoto, addDrinkPhotoByUrl, deleteDrinkPhoto, reorderDrinkPhotos } from "../services/api";
 import { coverStyle } from "../utils/coverStyle";
 import ImageDropZone from "./ImageDropZone";
+import { BoltIcon } from "./icons";
 
 export default function PhotoGallery({ drinkId, photos, onUpdated, canManage = false, coverFit, coverPos }) {
   const [activeIdx, setActiveIdx] = useState(0);
@@ -73,7 +74,7 @@ export default function PhotoGallery({ drinkId, photos, onUpdated, canManage = f
         <img className="gallery-main" src={mediaUrl(active.url)} alt="Фото энергетика" decoding="async"
           style={activeIdx === 0 ? coverStyle(coverFit, coverPos) : undefined} />
       ) : (
-        <div className="gallery-main gallery-main-empty">⚡ Фотографий пока нет</div>
+        <div className="gallery-main gallery-main-empty"><BoltIcon size={18} /> Фотографий пока нет</div>
       )}
 
       <div className="gallery-thumbs">
