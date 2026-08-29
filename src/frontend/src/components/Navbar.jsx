@@ -6,7 +6,7 @@ import Avatar from "./Avatar";
 import BrandText from "./BrandText";
 import ThemePicker from "./ThemePicker";
 import DrinkSearch from "./DrinkSearch";
-import { LogoutIcon, WrenchIcon } from "./icons";
+import { AdminIcon, GamepadIcon, LoginIcon, LogoutIcon, UserPlusIcon } from "./icons";
 
 function Bolt() {
   return (
@@ -65,8 +65,14 @@ export default function Navbar() {
       <DrinkSearch />
 
       <div className="navbar-actions" ref={actionsRef}>
+        <Link className="btn-icon navbar-collapsible" to="/games" title="Мини-игры" aria-label="Мини-игры">
+          <GamepadIcon size={18} />
+        </Link>
+
         {isAdmin && (
-          <Link className="btn btn-ghost btn-sm navbar-collapsible" to="/admin">Админка</Link>
+          <Link className="btn-icon navbar-collapsible" to="/admin" title="Админка" aria-label="Админка">
+            <AdminIcon size={18} />
+          </Link>
         )}
 
         {/* Редактор оформления (тема, акцент, фон…) — доступен и на мобильных */}
@@ -85,12 +91,21 @@ export default function Navbar() {
               <Avatar url={me?.avatarUrl} name={me?.displayName || me?.username} size={30} />
               <span className="navbar-user-name" style={{ fontSize: 14, fontWeight: 600 }}>{me?.displayName || "Профиль"}</span>
             </Link>
-            <button className="btn btn-ghost btn-sm navbar-collapsible" onClick={handleLogout}>Выйти</button>
+            <button className="btn-icon navbar-collapsible" onClick={handleLogout}
+              title="Выйти" aria-label="Выйти">
+              <LogoutIcon size={18} />
+            </button>
           </>
         ) : (
           <>
-            <Link className="btn btn-ghost btn-sm navbar-collapsible" to="/login">Войти</Link>
-            <Link className="btn btn-primary btn-sm navbar-collapsible" to="/register">Регистрация</Link>
+            <Link className="btn-icon navbar-collapsible" to="/login" title="Войти" aria-label="Войти">
+              <LoginIcon size={18} />
+            </Link>
+            {/* регистрация — главное действие для гостя, поэтому и без слова остаётся акцентной */}
+            <Link className="btn-icon btn-icon-accent navbar-collapsible" to="/register"
+              title="Регистрация" aria-label="Регистрация">
+              <UserPlusIcon size={18} />
+            </Link>
           </>
         )}
 
@@ -113,20 +128,28 @@ export default function Navbar() {
         <>
           <div className="notif-backdrop" onClick={() => setMenuOpen(false)} />
           <div className="navbar-menu" role="menu">
+            <Link className="navbar-menu-item" to="/games" onClick={() => setMenuOpen(false)}>
+              <GamepadIcon /> Мини-игры
+            </Link>
+
             {authed ? (
               <button className="navbar-menu-item danger" onClick={() => { setMenuOpen(false); handleLogout(); }}>
                 <LogoutIcon /> Выйти
               </button>
             ) : (
               <>
-                <Link className="navbar-menu-item" to="/login" onClick={() => setMenuOpen(false)}>Войти</Link>
-                <Link className="navbar-menu-item" to="/register" onClick={() => setMenuOpen(false)}>Регистрация</Link>
+                <Link className="navbar-menu-item" to="/login" onClick={() => setMenuOpen(false)}>
+                  <LoginIcon /> Войти
+                </Link>
+                <Link className="navbar-menu-item" to="/register" onClick={() => setMenuOpen(false)}>
+                  <UserPlusIcon /> Регистрация
+                </Link>
               </>
             )}
 
             {isAdmin && (
               <Link className="navbar-menu-item" to="/admin" onClick={() => setMenuOpen(false)}>
-                <WrenchIcon /> Админка
+                <AdminIcon /> Админка
               </Link>
             )}
           </div>

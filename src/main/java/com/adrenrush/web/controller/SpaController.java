@@ -61,7 +61,8 @@ public class SpaController {
     @GetMapping(
         value = {"/login", "/register", "/recover", "/profile", "/profile/**",
                  "/user/**", "/admin", "/admin/**",
-                 "/chats", "/chats/**"},
+                 "/chats", "/chats/**",
+                 "/games", "/games/**"},
         produces = MediaType.TEXT_HTML_VALUE
     )
     public ResponseEntity<Resource> spa() {

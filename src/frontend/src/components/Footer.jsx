@@ -24,6 +24,7 @@ export default function Footer() {
         <nav className="site-footer-nav">
           <span className="site-footer-nav-title">Разделы</span>
           <Link to="/">Рейтинг</Link>
+          <Link to="/games">Мини-игры</Link>
           <Link to="/profile">Профиль</Link>
           <Link to="/chats">Чаты</Link>
         </nav>

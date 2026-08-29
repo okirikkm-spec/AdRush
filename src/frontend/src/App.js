@@ -10,6 +10,9 @@ import ProfilePage from "./pages/ProfilePage";
 import UserPage from "./pages/UserPage";
 import AdminPage from "./pages/AdminPage";
 import ChatsPage from "./pages/ChatsPage";
+import GamesPage from "./pages/GamesPage";
+import KingOfTheHillPage from "./pages/KingOfTheHillPage";
+import BracketPage from "./pages/BracketPage";
 
 export default function App() {
   return (
@@ -26,6 +29,9 @@ export default function App() {
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/recover" element={<RecoverPage />} />
             <Route path="/user/:id" element={<UserPage />} />
+            <Route path="/games" element={<GamesPage />} />
+            <Route path="/games/king" element={<KingOfTheHillPage />} />
+            <Route path="/games/bracket" element={<BracketPage />} />
             <Route element={<PrivateRoute />}>
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/admin" element={<AdminPage />} />

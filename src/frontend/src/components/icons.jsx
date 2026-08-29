@@ -236,13 +236,13 @@ export function RefreshIcon({ size = 16 }) {
   );
 }
 
-/** Гаечный ключ — вход в админку. */
-export function WrenchIcon({ size = 16 }) {
+/** Ползунки пульта — вход в админку. */
+export function AdminIcon({ size = 16 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
       stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M14.7 6.3a4.5 4.5 0 0 0 5.9 5.9l-8.4 8.4a2.4 2.4 0 0 1-3.4-3.4l8.4-8.4z" />
-      <path d="M14.7 6.3L11.2 2.8a4.5 4.5 0 0 0-5.9 5.9l3.5 3.5" />
+      <path d="M5 20.5V14M5 10V3.5M12 20.5V12M12 8V3.5M19 20.5V16M19 12V3.5" />
+      <path d="M2.5 14h5M9.5 8h5M16.5 16h5" />
     </svg>
   );
 }
@@ -377,6 +377,64 @@ export function LogoutIcon({ size = 16 }) {
       stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M14 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2H14" />
       <path d="M17.5 8.5L21 12l-3.5 3.5M20.5 12H10" />
+    </svg>
+  );
+}
+
+/** Корона — режим «Царь горы» и действующий чемпион забега. */
+export function CrownIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 7.5l3.9 3.6L12 4.5l5.1 6.6L21 7.5L19.4 18H4.6L3 7.5z" />
+      <path d="M4.9 14.6h14.2" />
+    </svg>
+  );
+}
+
+/** Геймпад — раздел мини-игр. */
+export function GamepadIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="2.5" y="7" width="19" height="10" rx="5" />
+      <path d="M7 10.7v2.6M5.7 12h2.6" />
+      <path d="M15.6 11h.01M18.2 13.4h.01" strokeWidth="2.6" />
+    </svg>
+  );
+}
+
+/** Турнирная сетка — два поединка сходятся в один. */
+export function BracketIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 6.5h3.5A1.5 1.5 0 0 1 8 8v8a1.5 1.5 0 0 1-1.5 1.5H3" />
+      <path d="M8 12h6.5" />
+      <circle cx="18" cy="12" r="3" />
+    </svg>
+  );
+}
+
+/** Стрелка внутрь двери — вход в аккаунт (зеркало LogoutIcon). */
+export function LoginIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M13 4.5h4.5a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H13" />
+      <path d="M9 8.5l3.5 3.5L9 15.5M12.5 12H3" />
+    </svg>
+  );
+}
+
+/** Силуэт с плюсом — регистрация нового аккаунта. */
+export function UserPlusIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14.5 20.5v-1.8a4 4 0 0 0-4-4h-4a4 4 0 0 0-4 4v1.8" />
+      <circle cx="8.5" cy="7.5" r="3.8" />
+      <path d="M19 8.5v6M16 11.5h6" />
     </svg>
   );
 }

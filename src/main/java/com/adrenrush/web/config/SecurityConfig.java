@@ -46,7 +46,7 @@ public class SecurityConfig {
                     "/robots.txt", "/sitemap.xml",
                     "/login", "/register", "/recover", "/profile", "/profile/**",
                     "/drink/**", "/user/**", "/admin", "/admin/**",
-                    "/chats", "/chats/**").permitAll()
+                    "/chats", "/chats/**", "/games", "/games/**").permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
