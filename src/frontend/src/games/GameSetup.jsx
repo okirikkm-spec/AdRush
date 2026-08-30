@@ -4,18 +4,24 @@ import BrandFilter from "../components/BrandFilter";
 export const SIZES = [8, 16, 32];
 
 /**
- * Экран состава — общий для всех режимов: сколько банок участвует, какие бренды и
- * показывать ли оценки сайта. Состоянием владеет страница режима, здесь только разметка.
+ * Экран состава — общий для всех режимов: сколько банок участвует, какие бренды,
+ * брать ли только оценённые и показывать ли оценки сайта. Состоянием владеет
+ * страница режима, здесь только разметка.
  *
- * @param size      действующий размер состава (0 — весь пул)
- * @param sizeHint  подпись под «Участников» — у режимов она разная
- * @param footer    строка под кнопкой (рекорд, прошлый чемпион…)
+ * @param size       действующий размер состава (0 — весь пул)
+ * @param sizeHint   подпись под «Участников» — у режимов она разная
+ * @param ratedOnly  в составе только банки с оценками на сайте
+ * @param ratedCount сколько оценённых банок всего в каталоге (для подписи)
+ * @param footer     строка под кнопкой (рекорд, прошлый чемпион…)
  */
 export default function GameSetup({
   pool, brands, brandCounts, brandFilter, onBrandFilter,
   size, onSize, showRatings, onShowRatings,
+  ratedOnly, onRatedOnly, ratedCount = 0,
   sizeHint, startLabel = "Начать", onStart, footer,
 }) {
+  const chosenBrands = brandFilter ? brands.filter((b) => brandFilter.has(b)).length : brands.length;
+
   return (
     <div className="game-setup">
       <div className="game-setup-row">
@@ -42,8 +48,10 @@ export default function GameSetup({
         <div>
           <div className="game-setup-label">Бренды</div>
           <div className="game-setup-hint">
-            {brandFilter && brandFilter.size < brands.length
-              ? `Выбрано брендов: ${brandFilter.size} из ${brands.length}`
+            {/* считаем по доступным брендам: «только оценённые» сокращает список,
+                и в фильтре могут остаться бренды, которых в нём уже нет */}
+            {chosenBrands < brands.length
+              ? `Выбрано брендов: ${chosenBrands} из ${brands.length}`
               : "Участвуют все бренды каталога"}
           </div>
         </div>
@@ -53,7 +61,20 @@ export default function GameSetup({
         )}
       </div>
 
-      <div className="game-setup-row">
+      <div className="game-setup-row game-setup-row-switch">
+        <button type="button" className={"theme-toggle" + (ratedOnly ? " on" : "")}
+          role="switch" aria-checked={ratedOnly} onClick={() => onRatedOnly(!ratedOnly)}>
+          <span className="theme-toggle-track"><span className="theme-toggle-knob" /></span>
+          Только оценённые
+        </button>
+        <div className="game-setup-hint game-setup-switch-hint">
+          {ratedOnly
+            ? `В каталоге банок с оценками: ${ratedCount}`
+            : "Участвуют и те банки, которые ещё никто не оценил"}
+        </div>
+      </div>
+
+      <div className="game-setup-row game-setup-row-switch">
         <button type="button" className={"theme-toggle" + (showRatings ? " on" : "")}
           role="switch" aria-checked={showRatings} onClick={() => onShowRatings(!showRatings)}>
           <span className="theme-toggle-track"><span className="theme-toggle-knob" /></span>
@@ -62,7 +83,11 @@ export default function GameSetup({
       </div>
 
       {pool.length < 2 ? (
-        <div className="error-text">Под выбранные бренды подходит меньше двух банок.</div>
+        <div className="error-text">
+          {ratedOnly
+            ? "Оценённых банок под выбранные бренды меньше двух — снимите «Только оценённые» или добавьте бренды."
+            : "Под выбранные бренды подходит меньше двух банок."}
+        </div>
       ) : (
         <button className="btn btn-primary btn-lg" style={{ marginTop: 16 }} onClick={onStart}>
           {startLabel}
