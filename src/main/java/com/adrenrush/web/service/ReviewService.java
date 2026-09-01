@@ -73,6 +73,19 @@ public class ReviewService {
         );
     }
 
+    /**
+     * Оценки пользователя: id энергетика → балл. Мини-играм нужен состав «только
+     * оценённые мной», а полный список отзывов для этого избыточен.
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, Integer> getMyRatings(Long userId) {
+        Map<Long, Integer> ratings = new HashMap<>();
+        for (Object[] row : reviewRepository.getRatingsByUserId(userId)) {
+            ratings.put((Long) row[0], (Integer) row[1]);
+        }
+        return ratings;
+    }
+
     /** Пакетно загружает реакции для списка отзывов и группирует их по id отзыва. */
     private Map<Long, List<ReviewReaction>> loadReactions(List<Review> reviews) {
         if (reviews.isEmpty()) return Map.of();

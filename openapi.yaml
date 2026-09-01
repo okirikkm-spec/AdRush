@@ -402,6 +402,30 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /api/reviews/mine:
+    get:
+      tags: [Reviews]
+      summary: Мои оценки по всему каталогу
+      description: >
+        Пары «id энергетика → балл» для текущего пользователя. Нужны мини-играм,
+        чтобы собрать состав только из оценённых игроком банок.
+      responses:
+        '200':
+          description: Оценки текущего пользователя
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: integer
+                  minimum: 1
+                  maximum: 10
+                example:
+                  11: 9
+                  4: 10
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
   # ────────────────────────────── USERS ─────────────────────────────
   /api/users/{id}:
     get:
@@ -561,6 +585,12 @@ paths:
                 file:
                   type: string
                   format: binary
+                cutBackground:
+                  type: boolean
+                  default: false
+                  description: >-
+                    Убрать белый фон (пэкшот на белом сохраняется прозрачным PNG).
+                    Если фон не белый, картинка сохраняется как есть.
       responses:
         '200':
           description: Энергетик с обновлённой галереей
@@ -577,6 +607,15 @@ paths:
       summary: Добавить фото по ссылке (скачивается в хранилище, только админ)
       parameters:
         - $ref: '#/components/parameters/PathId'
+        - name: cutBackground
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: >-
+            Убрать белый фон (пэкшот на белом сохраняется прозрачным PNG).
+            Если фон не белый, картинка сохраняется как есть.
       requestBody:
         required: true
         content:
@@ -592,6 +631,74 @@ paths:
                 $ref: '#/components/schemas/DrinkResponseDto'
         '403':
           $ref: '#/components/responses/Forbidden'
+
+  /api/drinks/media/proxy:
+    get:
+      tags: [Drinks]
+      summary: Отдать картинку по внешней ссылке через наш домен (только админ)
+      description: >-
+        Нужен редактору фона: с чужого домена браузер не даёт снять пиксели с холста.
+        Картинка скачивается на сервере и отдаётся как есть, в хранилище ничего не сохраняется.
+      parameters:
+        - name: url
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Ссылка на изображение (http/https)
+      responses:
+        '200':
+          description: Байты изображения с исходным Content-Type
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/drinks/{id}/photos/{photoId}/image:
+    post:
+      tags: [Drinks]
+      summary: Заменить картинку фото — результат редактора фона (только админ)
+      description: >-
+        Принимает готовый PNG с прозрачностью. Позиция в галерее, источник и автор фото
+        сохраняются, старые файлы удаляются из хранилища, фото помечается как правленное
+        вручную — автоматическая обработка (оптимизация медиа) его больше не трогает.
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+        - name: photoId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Энергетик с обновлённой галереей
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DrinkResponseDto'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /api/drinks/{id}/photos/order:
     put:

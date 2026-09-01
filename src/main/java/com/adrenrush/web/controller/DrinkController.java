@@ -8,6 +8,8 @@ import com.adrenrush.web.exception.ApiException;
 import com.adrenrush.web.service.DrinkService;
 import com.adrenrush.web.service.ParserStagingService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -48,22 +50,60 @@ public class DrinkController {
         return ResponseEntity.ok(created);
     }
 
-    /** Добавление фото в галерею (файл) — только администратор. */
+    /**
+     * Добавление фото в галерею (файл) — только администратор.
+     * cutBackground=true — убрать белый фон, как у пэкшотов из каталогов.
+     */
     @PostMapping("/{id}/photos")
     public ResponseEntity<DrinkResponseDto> addPhoto(@PathVariable Long id,
                                                      @AuthenticationPrincipal User currentUser,
-                                                     @RequestParam("file") MultipartFile file) {
+                                                     @RequestParam("file") MultipartFile file,
+                                                     @RequestParam(name = "cutBackground", defaultValue = "false")
+                                                     boolean cutBackground) {
         requireAdmin(currentUser);
-        return ResponseEntity.ok(drinkService.addUserPhoto(id, file, currentUser));
+        return ResponseEntity.ok(drinkService.addUserPhoto(id, file, currentUser, cutBackground));
     }
 
-    /** Добавление фото по ссылке (скачивается в хранилище) — только администратор. */
+    /**
+     * Добавление фото по ссылке (скачивается в хранилище) — только администратор.
+     * cutBackground=true — убрать белый фон, как у пэкшотов из каталогов.
+     */
     @PostMapping("/{id}/photos/url")
     public ResponseEntity<DrinkResponseDto> addPhotoByUrl(@PathVariable Long id,
                                                           @AuthenticationPrincipal User currentUser,
+                                                          @RequestParam(name = "cutBackground", defaultValue = "false")
+                                                          boolean cutBackground,
                                                           @RequestBody Map<String, String> body) {
         requireAdmin(currentUser);
-        return ResponseEntity.ok(drinkService.addUserPhotoByUrl(id, body.get("url"), currentUser));
+        return ResponseEntity.ok(drinkService.addUserPhotoByUrl(id, body.get("url"), currentUser, cutBackground));
+    }
+
+    /**
+     * Отдаёт картинку по внешней ссылке через наш домен — чтобы редактор фона мог её открыть
+     * (с чужого домена браузер не даёт снять пиксели с холста). Только администратор.
+     */
+    @GetMapping("/media/proxy")
+    public ResponseEntity<byte[]> proxyImage(@AuthenticationPrincipal User currentUser,
+                                             @RequestParam("url") String url) {
+        requireAdmin(currentUser);
+        DrinkService.FetchedImage image = drinkService.fetchImage(url);
+        return ResponseEntity.ok()
+            .contentType(MediaType.parseMediaType(image.contentType()))
+            .cacheControl(CacheControl.noStore())
+            .body(image.data());
+    }
+
+    /**
+     * Замена картинки существующего фото — сюда приходит PNG из редактора фона.
+     * Только администратор.
+     */
+    @PostMapping("/{id}/photos/{photoId}/image")
+    public ResponseEntity<DrinkResponseDto> replacePhotoImage(@PathVariable Long id,
+                                                              @PathVariable Long photoId,
+                                                              @AuthenticationPrincipal User currentUser,
+                                                              @RequestParam("file") MultipartFile file) {
+        requireAdmin(currentUser);
+        return ResponseEntity.ok(drinkService.replacePhotoImage(currentUser, id, photoId, file));
     }
 
     /** Изменение порядка фотографий галереи (первое = обложка) — только администратор. */

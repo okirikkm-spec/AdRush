@@ -3,8 +3,14 @@ import { useRef, useState } from "react";
 /**
  * Универсальный выбор изображения: перетаскивание файла, клик для выбора,
  * либо вставка ссылки. Сообщает выбор через onSelect({ file }) | onSelect({ url }).
+ *
+ * Переключатель фона показывается, только если передан onBgMode: «оставить» — грузим как есть,
+ * «убрать белый» — сервер вырезает белый фон сам (как у пэкшотов из каталогов), «настроить» —
+ * родитель открывает редактор фона. Состояние живёт у родителя: выбор файла где-то запускает
+ * загрузку сразу (галерея), а где-то ждёт кнопки «Создать карточку» (админка), и в обоих
+ * случаях нужно значение на момент отправки.
  */
-export default function ImageDropZone({ onSelect, busy = false }) {
+export default function ImageDropZone({ onSelect, busy = false, bgMode = "none", onBgMode }) {
   const fileRef = useRef(null);
   const [dragOver, setDragOver] = useState(false);
   const [url, setUrl] = useState("");
@@ -27,6 +33,26 @@ export default function ImageDropZone({ onSelect, busy = false }) {
 
   return (
     <div className="imgdrop">
+      {onBgMode && (
+        <div className="imgdrop-bg">
+          <span className="imgdrop-bg-label">Фон</span>
+          <div className="bge-seg">
+            {[
+              ["none", "оставить", "Загрузить картинку как есть"],
+              ["auto", "убрать белый", "Убрать белый фон автоматически — как у пэкшотов из каталогов"],
+              ["manual", "настроить…", "Редактор: цвета с допуском, области, кисти, инверсии"],
+            ].map(([id, label, hint]) => (
+              <button key={id} type="button" title={hint} disabled={busy}
+                className={`bge-chip ${bgMode === id ? "on" : ""}`}
+                onClick={() => onBgMode(id)}>{label}</button>
+            ))}
+          </div>
+        </div>
+      )}
+      {onBgMode && bgMode === "manual" && (
+        <div className="muted imgdrop-note">Редактор откроется, когда выберете файл или добавите ссылку.</div>
+      )}
+
       <div
         className={`imgdrop-zone ${dragOver ? "dragover" : ""} ${preview ? "has-preview" : ""}`}
         onClick={() => fileRef.current?.click()}

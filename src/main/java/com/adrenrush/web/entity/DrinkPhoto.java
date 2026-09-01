@@ -46,5 +46,14 @@ public class DrinkPhoto {
     @Column(nullable = false)
     private int position = 0;
 
+    /**
+     * Картинку правили вручную в редакторе фона: автоматическая обработка её больше не трогает
+     * (иначе «Оптимизация медиа» вырезала бы фон заново и затёрла ручную работу).
+     * columnDefinition с DEFAULT — чтобы ddl-auto=update смог добавить NOT NULL колонку в уже
+     * заполненную таблицу.
+     */
+    @Column(nullable = false, columnDefinition = "boolean not null default false")
+    private boolean edited = false;
+
     private Instant createdAt = Instant.now();
 }

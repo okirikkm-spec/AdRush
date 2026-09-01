@@ -1,13 +1,19 @@
 import { useState, useEffect } from "react";
-import { mediaUrl, addDrinkPhoto, addDrinkPhotoByUrl, deleteDrinkPhoto, reorderDrinkPhotos } from "../services/api";
+import {
+  mediaUrl, addDrinkPhoto, addDrinkPhotoByUrl, deleteDrinkPhoto, fetchImageForEditing,
+  reorderDrinkPhotos, replaceDrinkPhoto,
+} from "../services/api";
 import { coverStyle } from "../utils/coverStyle";
 import ImageDropZone from "./ImageDropZone";
-import { BoltIcon } from "./icons";
+import BackgroundEditor from "./BackgroundEditor";
+import { BoltIcon, PaletteIcon } from "./icons";
 
 export default function PhotoGallery({ drinkId, photos, onUpdated, canManage = false, coverFit, coverPos }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const [adding, setAdding] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [bgMode, setBgMode] = useState("none");     // none | auto | manual
+  const [editing, setEditing] = useState(null);     // { source, photoId? } — что открыто в редакторе
   const [error, setError] = useState(null);
 
   // перетаскивание миниатюр для смены порядка (только админ)
@@ -21,12 +27,30 @@ export default function PhotoGallery({ drinkId, photos, onUpdated, canManage = f
   const active = photos[activeIdx];
 
   const handleSelect = async ({ file, url }) => {
+    // и файл, и ссылку правим ДО загрузки — на сервере не остаётся промежуточной картинки,
+    // а отменённый редактор просто ничего не добавляет
+    if (bgMode === "manual") {
+      if (file) {
+        setEditing({ source: file });
+        return;
+      }
+      setUploading(true);
+      setError(null);
+      try {
+        setEditing({ source: await fetchImageForEditing(url) });
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setUploading(false);
+      }
+      return;
+    }
     setUploading(true);
     setError(null);
     try {
       const updated = file
-        ? await addDrinkPhoto(drinkId, file)
-        : await addDrinkPhotoByUrl(drinkId, url);
+        ? await addDrinkPhoto(drinkId, file, bgMode === "auto")
+        : await addDrinkPhotoByUrl(drinkId, url, bgMode === "auto");
       onUpdated?.(updated);
       if (updated?.photos) setActiveIdx(updated.photos.length - 1);
       setAdding(false);
@@ -35,6 +59,17 @@ export default function PhotoGallery({ drinkId, photos, onUpdated, canManage = f
     } finally {
       setUploading(false);
     }
+  };
+
+  /** Готовый PNG из редактора: для существующего фото — замена, для нового файла — загрузка. */
+  const handleEdited = async (png) => {
+    const updated = editing.photoId
+      ? await replaceDrinkPhoto(drinkId, editing.photoId, png)
+      : await addDrinkPhoto(drinkId, png, false);
+    onUpdated?.(updated);
+    if (!editing.photoId && updated?.photos) setActiveIdx(updated.photos.length - 1);
+    setEditing(null);
+    setAdding(false);
   };
 
   const handleDelete = async (photoId, e) => {
@@ -68,6 +103,13 @@ export default function PhotoGallery({ drinkId, photos, onUpdated, canManage = f
 
   return (
     <div className="gallery">
+      {canManage && active && (
+        <button className="gallery-bg-btn" title="Редактор фона: цвета, области, кисти"
+          onClick={() => setEditing({ source: mediaUrl(active.url), photoId: active.id })}>
+          <PaletteIcon size={14} /> Фон
+        </button>
+      )}
+
       {active ? (
         // Кадрирование «Окно с информацией» применяем к обложке (первое фото);
         // остальные фото показываем целиком (contain по CSS).
@@ -111,7 +153,8 @@ export default function PhotoGallery({ drinkId, photos, onUpdated, canManage = f
         ))}
 
         {canManage && (
-          <button className="gallery-add" onClick={() => setAdding(true)} title="Добавить фото">
+          <button className="gallery-add" onClick={() => { setBgMode("none"); setAdding(true); }}
+            title="Добавить фото">
             +
           </button>
         )}
@@ -128,7 +171,8 @@ export default function PhotoGallery({ drinkId, photos, onUpdated, canManage = f
               <div className="modal-header">
                 <h2 className="modal-title" style={{ fontSize: 18 }}>Добавить фото</h2>
               </div>
-              <ImageDropZone onSelect={handleSelect} busy={uploading} />
+              <ImageDropZone onSelect={handleSelect} busy={uploading}
+                bgMode={bgMode} onBgMode={setBgMode} />
               {error && <div className="error-text">{error}</div>}
               <div className="modal-actions" style={{ marginTop: 14 }}>
                 <button className="btn btn-secondary" style={{ flex: 1 }}
@@ -139,6 +183,16 @@ export default function PhotoGallery({ drinkId, photos, onUpdated, canManage = f
             </div>
           </div>
         </div>
+      )}
+
+      {editing && (
+        <BackgroundEditor
+          source={editing.source}
+          title={editing.photoId ? "Редактор фона" : "Фон новой фотографии"}
+          fileName={editing.photoId ? `photo-${editing.photoId}.png` : "photo.png"}
+          onCancel={() => setEditing(null)}
+          onApply={handleEdited}
+        />
       )}
 
       {error && !adding && <div className="error-text">{error}</div>}

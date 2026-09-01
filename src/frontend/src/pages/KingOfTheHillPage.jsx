@@ -20,11 +20,11 @@ export default function KingOfTheHillPage() {
   const [brandFilter, setBrandFilter] = useState(null);
   // оценки по умолчанию скрыты: увидев «9.1 против 6.4», выбираешь уже не вкус, а цифру
   const [showRatings, setShowRatings] = useState(false);
-  // в каталоге много ещё не оценённых находок парсеров — их можно исключить из состава
-  const [ratedOnly, setRatedOnly] = useState(false);
+  // состав можно собрать только из банок, которые игрок оценил сам
+  const [mineOnly, setMineOnly] = useState(false);
 
-  const { drinks, loading, error, brands, brandCounts, pool, ratedCount } =
-    useGameCatalog(brandFilter, ratedOnly);
+  const { drinks, loading, error, brands, brandCounts, pool, myRatedCount, canFilterMine } =
+    useGameCatalog(brandFilter, mineOnly);
 
   const [roster, setRoster] = useState([]);   // весь состав забега
   const [queue, setQueue] = useState([]);     // очередь претендентов
@@ -130,7 +130,8 @@ export default function KingOfTheHillPage() {
               brandFilter={brandFilter} onBrandFilter={setBrandFilter}
               size={effectiveSize} onSize={setSize}
               showRatings={showRatings} onShowRatings={setShowRatings}
-              ratedOnly={ratedOnly} onRatedOnly={setRatedOnly} ratedCount={ratedCount}
+              mineOnly={mineOnly} onMineOnly={setMineOnly}
+              canMineOnly={canFilterMine} myRatedCount={myRatedCount}
               sizeHint="Банки берутся из каталога случайно — каждый забег новый."
               startLabel="Начать забег" onStart={start}
               footer={record && (

@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import ImageDropZone from "../components/ImageDropZone";
+import BackgroundEditor from "../components/BackgroundEditor";
 import UserModeration from "../components/UserModeration";
 import AuditLog from "../components/AuditLog";
 import ParseStagingModal from "../components/ParseStagingModal";
 import { BoxIcon, UsersIcon, ClipboardIcon, PlusIcon, RefreshIcon, ImageIcon } from "../components/icons";
 import {
   fetchMe, createDrink, fetchParseCandidates, addDrinkPhoto, addDrinkPhotoByUrl, optimizeMedia,
-  cleanupDescriptions,
+  cleanupDescriptions, fetchImageForEditing,
 } from "../services/api";
 
 export default function AdminPage() {
@@ -74,6 +75,9 @@ function AddDrinkCard({ onCreated }) {
   const [brand, setBrand] = useState("");
   const [description, setDescription] = useState("");
   const [cover, setCover] = useState(null); // { file } | { url } | null
+  const [bgMode, setBgMode] = useState("none"); // none | auto | manual
+  const [editing, setEditing] = useState(null); // файл, открытый в редакторе фона
+  const [edited, setEdited] = useState(false);
   const [msg, setMsg] = useState(null);
   const [saving, setSaving] = useState(false);
 
@@ -82,9 +86,11 @@ function AddDrinkCard({ onCreated }) {
     setSaving(true);
     try {
       const drink = await createDrink({ name, brand, description });
-      if (cover?.file) await addDrinkPhoto(drink.id, cover.file);
-      else if (cover?.url) await addDrinkPhotoByUrl(drink.id, cover.url);
+      // обложку из редактора вырезать повторно не надо — она уже с прозрачностью
+      if (cover?.file) await addDrinkPhoto(drink.id, cover.file, bgMode === "auto");
+      else if (cover?.url) await addDrinkPhotoByUrl(drink.id, cover.url, bgMode === "auto");
       setName(""); setBrand(""); setDescription(""); setCover(null);
+      setBgMode("none"); setEdited(false);
       onCreated?.(drink);
     } catch (e) {
       setMsg(e.message);
@@ -113,7 +119,30 @@ function AddDrinkCard({ onCreated }) {
       </div>
       <div className="input-group">
         <label className="input-label">Обложка (необязательно)</label>
-        <ImageDropZone onSelect={setCover} busy={saving} />
+        <ImageDropZone
+          onSelect={async (sel) => {
+            if (bgMode !== "manual") { setCover(sel); setEdited(false); return; }
+            if (sel.file) { setEditing(sel.file); return; }
+            // ссылку сначала тянем через наш сервер: иначе редактор не сможет её открыть
+            setMsg(null);
+            try {
+              setEditing(await fetchImageForEditing(sel.url));
+            } catch (e) {
+              setMsg(e.message);
+              setCover(sel);
+            }
+          }}
+          busy={saving} bgMode={bgMode} onBgMode={setBgMode} />
+        {edited && <div className="muted imgdrop-note">Фон обложки отредактирован.</div>}
+        {editing && (
+          <BackgroundEditor
+            source={editing}
+            title="Обложка: редактор фона"
+            fileName="cover.png"
+            onCancel={() => setEditing(null)}
+            onApply={async (png) => { setCover({ file: png }); setEdited(true); setEditing(null); }}
+          />
+        )}
       </div>
       <button className="btn btn-primary" onClick={submit} disabled={saving || !name.trim()}>
         {saving ? "…" : "Создать карточку"}

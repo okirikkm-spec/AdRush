@@ -5,19 +5,20 @@ export const SIZES = [8, 16, 32];
 
 /**
  * Экран состава — общий для всех режимов: сколько банок участвует, какие бренды,
- * брать ли только оценённые и показывать ли оценки сайта. Состоянием владеет
+ * брать ли только свои оценённые и показывать ли оценки сайта. Состоянием владеет
  * страница режима, здесь только разметка.
  *
- * @param size       действующий размер состава (0 — весь пул)
- * @param sizeHint   подпись под «Участников» — у режимов она разная
- * @param ratedOnly  в составе только банки с оценками на сайте
- * @param ratedCount сколько оценённых банок всего в каталоге (для подписи)
- * @param footer     строка под кнопкой (рекорд, прошлый чемпион…)
+ * @param size         действующий размер состава (0 — весь пул)
+ * @param sizeHint     подпись под «Участников» — у режимов она разная
+ * @param mineOnly     в составе только банки, которые оценил сам игрок
+ * @param canMineOnly  оценки игрока известны (гостю переключатель недоступен)
+ * @param myRatedCount сколько банок игрок оценил (для подписи)
+ * @param footer       строка под кнопкой (рекорд, прошлый чемпион…)
  */
 export default function GameSetup({
   pool, brands, brandCounts, brandFilter, onBrandFilter,
   size, onSize, showRatings, onShowRatings,
-  ratedOnly, onRatedOnly, ratedCount = 0,
+  mineOnly, onMineOnly, canMineOnly = false, myRatedCount = 0,
   sizeHint, startLabel = "Начать", onStart, footer,
 }) {
   const chosenBrands = brandFilter ? brands.filter((b) => brandFilter.has(b)).length : brands.length;
@@ -62,15 +63,18 @@ export default function GameSetup({
       </div>
 
       <div className="game-setup-row game-setup-row-switch">
-        <button type="button" className={"theme-toggle" + (ratedOnly ? " on" : "")}
-          role="switch" aria-checked={ratedOnly} onClick={() => onRatedOnly(!ratedOnly)}>
+        <button type="button" className={"theme-toggle" + (mineOnly ? " on" : "")}
+          role="switch" aria-checked={mineOnly} disabled={!canMineOnly}
+          onClick={() => onMineOnly(!mineOnly)}>
           <span className="theme-toggle-track"><span className="theme-toggle-knob" /></span>
-          Только оценённые
+          Только оценённые мной
         </button>
         <div className="game-setup-hint game-setup-switch-hint">
-          {ratedOnly
-            ? `В каталоге банок с оценками: ${ratedCount}`
-            : "Участвуют и те банки, которые ещё никто не оценил"}
+          {!canMineOnly
+            ? "Войдите, чтобы собрать состав из своих оценок"
+            : mineOnly
+              ? `Вы оценили банок: ${myRatedCount}`
+              : "Участвуют и те банки, которые вы ещё не оценили"}
         </div>
       </div>
 
@@ -84,9 +88,11 @@ export default function GameSetup({
 
       {pool.length < 2 ? (
         <div className="error-text">
-          {ratedOnly
-            ? "Оценённых банок под выбранные бренды меньше двух — снимите «Только оценённые» или добавьте бренды."
-            : "Под выбранные бренды подходит меньше двух банок."}
+          {!mineOnly
+            ? "Под выбранные бренды подходит меньше двух банок."
+            : myRatedCount < 2
+              ? "Вы оценили меньше двух банок — снимите «Только оценённые мной» или поставьте оценки в каталоге."
+              : "Ваших оценённых банок под выбранные бренды меньше двух — снимите фильтр или добавьте бренды."}
         </div>
       ) : (
         <button className="btn btn-primary btn-lg" style={{ marginTop: 16 }} onClick={onStart}>

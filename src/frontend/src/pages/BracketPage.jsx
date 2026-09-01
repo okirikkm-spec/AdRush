@@ -44,11 +44,11 @@ export default function BracketPage() {
   const [size, setSize] = useState(16);
   const [brandFilter, setBrandFilter] = useState(null);
   const [showRatings, setShowRatings] = useState(false);
-  // в каталоге много ещё не оценённых находок парсеров — их можно исключить из состава
-  const [ratedOnly, setRatedOnly] = useState(false);
+  // состав можно собрать только из банок, которые игрок оценил сам
+  const [mineOnly, setMineOnly] = useState(false);
 
-  const { drinks, loading, error, brands, brandCounts, pool, ratedCount } =
-    useGameCatalog(brandFilter, ratedOnly);
+  const { drinks, loading, error, brands, brandCounts, pool, myRatedCount, canFilterMine } =
+    useGameCatalog(brandFilter, mineOnly);
 
   const [roster, setRoster] = useState([]);     // весь состав турнира
   const [roundNo, setRoundNo] = useState(1);
@@ -178,7 +178,8 @@ export default function BracketPage() {
               brandFilter={brandFilter} onBrandFilter={setBrandFilter}
               size={effectiveSize} onSize={setSize}
               showRatings={showRatings} onShowRatings={setShowRatings}
-              ratedOnly={ratedOnly} onRatedOnly={setRatedOnly} ratedCount={ratedCount}
+              mineOnly={mineOnly} onMineOnly={setMineOnly}
+              canMineOnly={canFilterMine} myRatedCount={myRatedCount}
               sizeHint="Лучше степень двойки — иначе лишним достанется автопроход в следующий раунд."
               startLabel="Начать турнир" onStart={start}
               footer={last && (

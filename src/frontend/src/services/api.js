@@ -261,9 +261,11 @@ export function optimizeMedia() {
 export function cleanupDescriptions() {
   return jsonRequest(`/api/drinks/descriptions/cleanup`, { method: "POST", auth: true });
 }
-export async function addDrinkPhoto(id, file) {
+/** @param cutBackground убрать белый фон (пэкшот на белом станет прозрачным PNG). */
+export async function addDrinkPhoto(id, file, cutBackground = false) {
   const formData = new FormData();
   formData.append("file", file);
+  formData.append("cutBackground", cutBackground ? "true" : "false");
   const res = await fetch(`${API_BASE}/api/drinks/${id}/photos`, {
     method: "POST",
     headers: authHeaders(),
@@ -273,8 +275,35 @@ export async function addDrinkPhoto(id, file) {
   return res.json();
 }
 
-export function addDrinkPhotoByUrl(id, url) {
-  return jsonRequest(`/api/drinks/${id}/photos/url`, { method: "POST", body: { url }, auth: true });
+/**
+ * Тянет картинку по внешней ссылке через наш сервер и отдаёт её файлом: браузеру чужой домен
+ * пиксели редактировать не даст, а своему — даст.
+ */
+export async function fetchImageForEditing(url) {
+  const res = await fetch(`${API_BASE}/api/drinks/media/proxy?url=${encodeURIComponent(url)}`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw await parseError(res, "Не удалось загрузить изображение по ссылке");
+  const blob = await res.blob();
+  return new File([blob], "image", { type: blob.type || "image/png" });
+}
+
+/** Замена картинки существующего фото — сюда уходит PNG из редактора фона. */
+export async function replaceDrinkPhoto(id, photoId, file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${API_BASE}/api/drinks/${id}/photos/${photoId}/image`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: formData,
+  });
+  if (!res.ok) throw await parseError(res, "Ошибка сохранения фото");
+  return res.json();
+}
+
+export function addDrinkPhotoByUrl(id, url, cutBackground = false) {
+  return jsonRequest(`/api/drinks/${id}/photos/url?cutBackground=${cutBackground ? "true" : "false"}`,
+    { method: "POST", body: { url }, auth: true });
 }
 
 /* ─────────────── Отзывы ─────────────── */
@@ -291,6 +320,11 @@ export function submitReview(drinkId, rating, text) {
 export function deleteMyReview(drinkId) {
   return jsonRequest(`/api/drinks/${drinkId}/reviews/me`, { method: "DELETE", auth: true });
 }
+/** Мои оценки по всему каталогу: { id энергетика: балл }. Нужны мини-играм. */
+export function fetchMyRatings() {
+  return jsonRequest("/api/reviews/mine", { auth: true });
+}
+
 /**
  * Поставить эмодзи-реакцию на отзыв. Повторная та же реакция снимается, другая — заменяет.
  * Возвращает обновлённый отзыв (со сводкой reactions и myReaction).

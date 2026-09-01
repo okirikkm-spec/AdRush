@@ -476,7 +476,7 @@ public class DrinkService {
                 photoRepository.save(photo);
                 return PhotoOutcome.DOWNLOADED;
             }
-            if (photo.getSource() == PhotoSource.PARSED && cutBackgroundInPlace(photo)) {
+            if (photo.getSource() == PhotoSource.PARSED && !photo.isEdited() && cutBackgroundInPlace(photo)) {
                 return PhotoOutcome.DEBACKGROUNDED;
             }
             if (photo.getThumbUrl() == null || thumbnailLostTransparency(photo) || thumbnailOutdated(photo)) {
@@ -586,27 +586,35 @@ public class DrinkService {
         return "описание изменено";
     }
 
-    /** Добавляет пользовательское фото в конец галереи (с генерацией превью). */
+    /**
+     * Добавляет пользовательское фото в конец галереи (с генерацией превью).
+     *
+     * @param cutBackground true — убрать белый фон, как у пэкшотов из каталогов (галочка при
+     *                      загрузке); если фон не белый, картинка сохраняется как есть
+     */
     @Transactional
-    public DrinkResponseDto addUserPhoto(Long drinkId, MultipartFile file, User uploader) {
+    public DrinkResponseDto addUserPhoto(Long drinkId, MultipartFile file, User uploader, boolean cutBackground) {
         Drink drink = drinkRepository.findById(drinkId)
             .orElseThrow(() -> ApiException.notFound("Энергетик не найден"));
 
-        String contentType = file.getContentType();
-        if (contentType == null || !contentType.startsWith("image/")) {
-            throw ApiException.badRequest("Можно загружать только изображения");
-        }
-        String ext = contentType.substring(contentType.indexOf('/') + 1).replaceAll("[^a-zA-Z0-9]", "");
-        if (ext.isBlank()) ext = "jpg";
+        UploadedImage upload = readUpload(file);
+        String contentType = upload.contentType();
+        byte[] data = upload.data();
 
-        byte[] data;
-        try {
-            data = file.getBytes();
-        } catch (IOException e) {
-            throw ApiException.badRequest("Не удалось прочитать загруженный файл");
+        if (cutBackground) {
+            // фон вырезаем ДО формирования ключа: результат всегда PNG, расширение должно совпасть
+            Optional<byte[]> cut = removeBackgroundIfEnabled(data);
+            if (cut.isPresent()) {
+                data = cut.get();
+                contentType = "image/png";
+                log.info("Загрузка фото «{}»: белый фон вырезан", file.getOriginalFilename());
+            } else {
+                log.info("Загрузка фото «{}»: фон не вырезан (не белый или картинка не подошла)",
+                    file.getOriginalFilename());
+            }
         }
 
-        String key = "photos/" + drinkId + "/" + System.currentTimeMillis() + "." + ext;
+        String key = "photos/" + drinkId + "/" + System.currentTimeMillis() + "." + uploadExt(contentType);
         StoredImage stored;
         try {
             stored = storeImage(key, data, contentType);
@@ -621,9 +629,13 @@ public class DrinkService {
         return getById(drinkId);
     }
 
-    /** Добавляет пользовательское фото по ссылке: скачивает картинку в наше хранилище (с превью). */
+    /**
+     * Добавляет пользовательское фото по ссылке: скачивает картинку в наше хранилище (с превью).
+     *
+     * @param cutBackground true — убрать белый фон (галочка при загрузке), см. {@link #addUserPhoto}
+     */
     @Transactional
-    public DrinkResponseDto addUserPhotoByUrl(Long drinkId, String url, User uploader) {
+    public DrinkResponseDto addUserPhotoByUrl(Long drinkId, String url, User uploader, boolean cutBackground) {
         Drink drink = drinkRepository.findById(drinkId)
             .orElseThrow(() -> ApiException.notFound("Энергетик не найден"));
         if (url == null || url.isBlank()) {
@@ -631,7 +643,7 @@ public class DrinkService {
         }
         StoredImage stored;
         try {
-            stored = fetchAndStore("photos/" + drinkId, url.trim());
+            stored = fetchAndStore("photos/" + drinkId, url.trim(), cutBackground);
         } catch (Exception e) {
             throw ApiException.badRequest("Не удалось загрузить изображение по ссылке");
         }
@@ -639,6 +651,68 @@ public class DrinkService {
         log.info("Загрузка фото (по ссылке): энергетик #{} «{}», пользователь «{}», {} → {}",
             drinkId, drink.getName(), uploader.getUsername(), url.trim(), stored.url());
         return getById(drinkId);
+    }
+
+    /**
+     * Заменяет картинку существующего фото — сюда приходит результат редактора фона.
+     * Позиция в галерее, источник и автор сохраняются, старые файлы из хранилища удаляются,
+     * а фото помечается как правленное вручную: автоматическая обработка его больше не трогает.
+     */
+    @Transactional
+    public DrinkResponseDto replacePhotoImage(User actor, Long drinkId, Long photoId, MultipartFile file) {
+        DrinkPhoto photo = photoRepository.findById(photoId)
+            .orElseThrow(() -> ApiException.notFound("Фотография не найдена"));
+        if (!photo.getDrink().getId().equals(drinkId)) {
+            throw ApiException.badRequest("Фото не относится к этому энергетику");
+        }
+
+        UploadedImage upload = readUpload(file);
+        String key = "photos/" + drinkId + "/" + System.currentTimeMillis()
+            + "." + uploadExt(upload.contentType());
+        StoredImage stored;
+        try {
+            stored = storeImage(key, upload.data(), upload.contentType());
+        } catch (Exception e) {
+            throw new ApiException(HttpStatus.INSUFFICIENT_STORAGE, "Не удалось сохранить изображение");
+        }
+
+        String oldUrl = photo.getUrl();
+        String oldThumb = photo.getThumbUrl();
+        photo.setUrl(stored.url());
+        photo.setThumbUrl(stored.thumbUrl());
+        photo.setEdited(true);
+        photoRepository.save(photo);
+        // старые файлы больше не нужны: ключ у новой картинки другой (timestamp), кэш не собьётся
+        if (storageKeyOf(oldUrl) != null) storageService.delete(oldUrl);
+        if (oldThumb != null) storageService.delete(oldThumb);
+
+        String drinkName = photo.getDrink().getName();
+        auditService.record(actor, AuditAction.DRINK_UPDATE, AuditTargetType.DRINK, drinkId, drinkName,
+            "Фон фото изменён в редакторе");
+        log.info("Редактор фона: энергетик #{} «{}», фото #{} → {} ({} КБ)",
+            drinkId, drinkName, photoId, stored.url(), upload.data().length / 1024);
+        return getById(drinkId);
+    }
+
+    /** Загруженный файл: байты плюс проверенный тип содержимого. */
+    private record UploadedImage(byte[] data, String contentType) {}
+
+    private UploadedImage readUpload(MultipartFile file) {
+        String contentType = file.getContentType();
+        if (contentType == null || !contentType.startsWith("image/")) {
+            throw ApiException.badRequest("Можно загружать только изображения");
+        }
+        try {
+            return new UploadedImage(file.getBytes(), contentType);
+        } catch (IOException e) {
+            throw ApiException.badRequest("Не удалось прочитать загруженный файл");
+        }
+    }
+
+    /** Расширение файла по типу содержимого загрузки: image/png → png. */
+    private String uploadExt(String contentType) {
+        String ext = contentType.substring(contentType.indexOf('/') + 1).replaceAll("[^a-zA-Z0-9]", "");
+        return ext.isBlank() ? "jpg" : ext;
     }
 
     /**
@@ -667,10 +741,34 @@ public class DrinkService {
     /**
      * Загружает картинку по URL и кладёт в хранилище (оригинал + превью).
      *
-     * @param cutBackground true — попытаться сделать белый фон прозрачным (для пэкшотов из
-     *                      каталогов; к пользовательским фото не применяется)
+     * @param cutBackground true — попытаться сделать белый фон прозрачным (у обложек из каталогов
+     *                      это делается само, у ручной загрузки — по галочке администратора)
      */
     private StoredImage fetchAndStore(String prefix, String url, boolean cutBackground) throws Exception {
+        FetchedImage fetched = download(url);
+        byte[] data = fetched.data();
+        String contentType = fetched.contentType();
+
+        if (cutBackground) {
+            // фон вырезаем ДО формирования ключа: результат всегда PNG, расширение должно совпасть
+            Optional<byte[]> cut = removeBackgroundIfEnabled(data);
+            if (cut.isPresent()) {
+                data = cut.get();
+                contentType = "image/png";
+                log.info("Обложка {}: белый фон вырезан", url);
+            }
+        }
+
+        String key = prefix + "/" + System.currentTimeMillis() + "-"
+            + Integer.toHexString(url.hashCode()) + "." + imageExt(contentType);
+        return storeImage(key, data, contentType);
+    }
+
+    /** Картинка, скачанная по ссылке: байты плюс распознанный тип содержимого. */
+    public record FetchedImage(byte[] data, String contentType) {}
+
+    /** Качает картинку по ссылке и определяет её тип. Ничего не сохраняет. */
+    private FetchedImage download(String url) throws Exception {
         Connection.Response resp = Jsoup.connect(url)
             .ignoreContentType(true)
             // максимально «браузерный» UA — некоторые CDN режут запросы по нестандартному агенту
@@ -696,20 +794,28 @@ public class DrinkService {
         if (contentType == null || !contentType.startsWith("image/")) {
             throw new IllegalArgumentException("Ссылка не ведёт на изображение");
         }
+        return new FetchedImage(data, contentType);
+    }
 
-        if (cutBackground) {
-            // фон вырезаем ДО формирования ключа: результат всегда PNG, расширение должно совпасть
-            Optional<byte[]> cut = removeBackgroundIfEnabled(data);
-            if (cut.isPresent()) {
-                data = cut.get();
-                contentType = "image/png";
-                log.info("Обложка {}: белый фон вырезан", url);
-            }
+    /**
+     * Отдаёт картинку по внешней ссылке администратору — этим живёт редактор фона: чужой домен
+     * браузеру пиксели с холста снять не даст, а наш — даст. Ничего не сохраняем: если админ
+     * закроет редактор, в хранилище не останется мусора.
+     */
+    public FetchedImage fetchImage(String url) {
+        String trimmed = url == null ? "" : url.trim();
+        if (trimmed.isBlank()) {
+            throw ApiException.badRequest("Укажите ссылку на изображение");
         }
-
-        String key = prefix + "/" + System.currentTimeMillis() + "-"
-            + Integer.toHexString(url.hashCode()) + "." + imageExt(contentType);
-        return storeImage(key, data, contentType);
+        if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+            throw ApiException.badRequest("Ссылка должна начинаться с http:// или https://");
+        }
+        try {
+            return download(trimmed);
+        } catch (Exception e) {
+            log.warn("Редактор фона: не удалось скачать {} — {}", trimmed, e.getMessage());
+            throw ApiException.badRequest("Не удалось загрузить изображение по ссылке");
+        }
     }
 
     /** Вырезание белого фона, если оно включено в конфиге (media.remove-white-background). */
