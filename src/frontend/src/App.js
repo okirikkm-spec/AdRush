@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "./ThemeContext";
 import { ChatProvider } from "./ChatContext";
 import PrivateRoute from "./components/PrivateRoute";
+import SiteBackground from "./components/SiteBackground";
 import MainPage from "./pages/MainPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
@@ -18,8 +19,7 @@ export default function App() {
   return (
     <ThemeProvider>
       <ChatProvider>
-        <div className="bg-grid" aria-hidden="true" />
-        <div className="corner-glow" aria-hidden="true" />
+        <SiteBackground />
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<MainPage />} />

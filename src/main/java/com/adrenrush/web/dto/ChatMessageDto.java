@@ -67,5 +67,9 @@ public class ChatMessageDto {
         private String bg;
         private double radius;
         private boolean bgAnim;
+        /** Рисунок заднего фона: grid | flow | none. */
+        private String bgStyle;
+        /** Множитель скорости анимации фона. */
+        private double bgSpeed;
     }
 }

@@ -86,7 +86,7 @@ function SharedReview({ review }) {
 
 /** Карточка темы оформления внутри сообщения: превью, «Предпросмотр» (примерить без сохранения) и «Применить». */
 function SharedTheme({ theme }) {
-  const { setAccent, setBg, setRadius, setBgAnim, previewTheme, endPreview } = useTheme();
+  const { setAccent, setBg, setRadius, setBgAnim, setBgStyle, setBgSpeed, previewTheme, endPreview } = useTheme();
   const [applied, setApplied] = useState(false);
   const [previewing, setPreviewing] = useState(false);
 
@@ -103,6 +103,9 @@ function SharedTheme({ theme }) {
     setBg(theme.bg);
     if (typeof theme.radius === "number") setRadius(theme.radius);
     setBgAnim(!!theme.bgAnim);
+    if (theme.bgStyle) setBgStyle(theme.bgStyle);
+    // У старых тем поля нет — приходит 0, свою скорость не трогаем.
+    if (theme.bgSpeed) setBgSpeed(theme.bgSpeed);
     setPreviewing(false);
     setApplied(true);
   };

@@ -42,6 +42,8 @@ public class ChatService {
     private final ObjectMapper objectMapper;
 
     private static final java.util.regex.Pattern HEX = java.util.regex.Pattern.compile("^#[0-9a-fA-F]{6}$");
+    /** Допустимые рисунки заднего фона (см. BG_STYLE_PRESETS во фронтенде). */
+    private static final Set<String> BG_STYLES = Set.of("grid", "flow", "none");
 
     /* ─────────────── Чтение ─────────────── */
 
@@ -483,6 +485,9 @@ public class ChatService {
         double r = toDouble(theme.get("radius"), 1);
         t.setRadius(r < 0 ? 0 : Math.min(r, 3));
         t.setBgAnim(!Boolean.FALSE.equals(toBool(theme.get("bgAnim"))));
+        t.setBgStyle(oneOf(theme.get("bgStyle"), BG_STYLES, "grid"));
+        double sp = toDouble(theme.get("bgSpeed"), 1);
+        t.setBgSpeed(sp < 0.25 ? 0.25 : Math.min(sp, 3));
         String name = theme.get("name") == null ? null : theme.get("name").toString().strip();
         if (name != null && name.length() > 40) name = name.substring(0, 40);
         t.setName(name == null || name.isBlank() ? null : name);
@@ -500,6 +505,12 @@ public class ChatService {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    /** Значение из белого списка (иначе — запасное): тема приходит целиком с клиента. */
+    private String oneOf(Object v, Set<String> allowed, String fallback) {
+        String s = v == null ? "" : v.toString().trim().toLowerCase();
+        return allowed.contains(s) ? s : fallback;
     }
 
     private String hexOr(Object v, String fallback) {

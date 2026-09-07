@@ -39,6 +39,9 @@
   --shadow-lg: 0 16px 56px rgba(0, 0, 0, 0.6);
   --font: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
 
+  /* Множитель скорости анимации фона; задаётся пользователем (см. ThemeContext) */
+  --bg-speed: 1;
+
   --grid-line: rgba(255, 255, 255, 0.035);
   --grid-glow: color-mix(in srgb, var(--accent) 16%, transparent);
 }
@@ -70,7 +73,7 @@ a { color: inherit; text-decoration: none; }
   position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden;
   -webkit-mask: linear-gradient(135deg, #000 0%, #000 40%, transparent 50%, #000 60%, #000 100%) 0 0 / 300% 300% no-repeat;
   mask: linear-gradient(135deg, #000 0%, #000 40%, transparent 50%, #000 60%, #000 100%) 0 0 / 300% 300% no-repeat;
-  animation: grid-wave 10s ease-in-out infinite;
+  animation: grid-wave calc(10s / var(--bg-speed)) ease-in-out infinite;
 }
 /* Сетка пропадает и снова появляется волной — из левого-верхнего в правый-нижний угол */
 @keyframes grid-wave {
@@ -93,7 +96,7 @@ a { color: inherit; text-decoration: none; }
   mask: radial-gradient(circle at center, #000 0%, transparent 62%);
   -webkit-mask-size: 65% 65%; mask-size: 65% 65%;
   -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
-  animation: grid-drift 26s ease-in-out infinite alternate;
+  animation: grid-drift calc(26s / var(--bg-speed)) ease-in-out infinite alternate;
 }
 @keyframes grid-drift {
   0%   { -webkit-mask-position: 12% 18%; mask-position: 12% 18%; opacity: 0.35; }
@@ -110,6 +113,12 @@ a { color: inherit; text-decoration: none; }
 /* Пользователь может выключить «живой» фон: остаётся статичная сетка + угловое свечение */
 [data-bg-anim="off"] .bg-grid { animation: none; -webkit-mask: none; mask: none; }
 [data-bg-anim="off"] .bg-grid::after { display: none; }
+
+/* ─── Анимированный фон-контуры: канвас на весь экран (components/FlowBackground.jsx) ─── */
+.bg-flow {
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  display: block; width: 100%; height: 100%;
+}
 
 /* ─── Акцентное свечение из левого верхнего угла (как в шапке окна фильтра) ─── */
 .corner-glow {
@@ -283,19 +292,20 @@ button.navbar-search-toggle { display: none; } /* показывается то�
 .theme-picker { position: relative; display: flex; }
 .theme-pop {
   position: absolute; top: calc(100% + 10px); right: 0; z-index: 150;
-  width: 256px; padding: 14px; max-height: min(76vh, 580px); overflow-y: auto;
+  width: 440px; padding: 14px; max-height: min(88vh, 640px); overflow-y: auto;
   background: var(--surface); border: 1px solid var(--border-light);
   border-radius: var(--radius); box-shadow: var(--shadow-lg);
   animation: pop 0.15s ease;
 }
-.theme-sec + .theme-sec { margin-top: 16px; }
+/* Две колонки: так все разделы помещаются без прокрутки. На узких экранах образцы
+   цвета занимают всю ширину — иначе кружки становятся меньше пальца. */
+.theme-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 13px 14px; align-items: start; }
+.theme-sec-anim { align-self: center; }
 .theme-pop-title {
   font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
   color: var(--text-faint); margin-bottom: 11px;
 }
-.theme-swatches {
-  display: grid; grid-template-columns: repeat(5, 1fr); gap: 9px; margin-bottom: 11px;
-}
+.theme-swatches { display: grid; grid-template-columns: repeat(5, 1fr); gap: 9px; }
 .theme-swatch {
   position: relative; aspect-ratio: 1; border-radius: 50%; cursor: pointer;
   background: var(--sw); border: 2px solid transparent;
@@ -306,21 +316,24 @@ button.navbar-search-toggle { display: none; } /* показывается то�
 .theme-swatch:hover { transform: scale(1.12); }
 .theme-swatch.active { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--sw); }
 .theme-swatch.none { background: var(--surface-2); color: var(--text-muted); }
-.theme-swatch svg { filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45)); }
-.theme-custom {
-  width: 100%; display: flex; align-items: center; gap: 9px; cursor: pointer; position: relative;
-  padding: 8px 11px; font-size: 13.5px; font-weight: 600; color: var(--text);
-  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+/* Свой цвет — такой же кружок текущего цвета, но в радужном ободке: заливка идёт по
+   padding-box, радуга по border-box, поэтому рамка и остаётся градиентной. */
+.theme-swatch-custom {
+  background:
+    linear-gradient(var(--sw), var(--sw)) padding-box,
+    conic-gradient(from 0.5turn, #ff3b30, #ff7a18, #ffb02e, #36c93b, #10b981,
+                   #2e9bff, #6366f1, #a855f7, #ec4899, #ff3b30) border-box;
+  border-width: 3px;
+  box-shadow: none;
 }
-.theme-custom:hover { border-color: var(--border-light); }
-.theme-custom-dot { width: 16px; height: 16px; border-radius: 50%; box-shadow: 0 0 0 1px var(--border-light) inset; flex-shrink: 0; }
-/* Нативный color-input скрыт, но кликается через label */
-.theme-custom input[type="color"] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.theme-swatch svg { filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45)); }
+/* Нативный color-input скрыт, но кликается через label-кружок */
+.theme-swatch input[type="color"] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 
-/* Сегменты «скругление углов» */
-.theme-seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+/* Сегменты «скругление углов» и «задний фон» */
+.theme-seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .theme-seg-btn {
-  padding: 8px 6px; font-size: 12.5px; font-weight: 600; font-family: var(--font);
+  padding: 8px 4px; font-size: 12px; font-weight: 600; font-family: var(--font); white-space: nowrap;
   text-align: center; cursor: pointer; color: var(--text);
   background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
   transition: border-color 0.15s, color 0.15s, background 0.15s;
@@ -345,9 +358,14 @@ button.navbar-search-toggle { display: none; } /* показывается то�
 }
 .theme-toggle.on .theme-toggle-knob { left: 18px; }
 
+/* Ползунок скорости анимации */
+.theme-speed { width: 100%; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.theme-speed:disabled { cursor: not-allowed; opacity: 0.5; }
+.theme-pop-title .theme-speed-val { color: var(--text-muted); }
+
 .theme-pop-foot {
   display: flex; align-items: stretch; gap: 8px;
-  margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border);
+  margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--border);
 }
 .theme-pop-foot .btn { flex: 1; }
 
@@ -1660,7 +1678,9 @@ button.review-author:hover { color: var(--accent); }
   .notif-panel { width: min(320px, 94vw); }
 
   /* Поповер выбора цвета: кнопка-палитра не у края экрана, поэтому крепим к краю окна */
-  .theme-pop { position: fixed; top: 64px; right: 12px; width: min(248px, calc(100vw - 24px)); }
+  .theme-pop { position: fixed; top: 64px; right: 12px; width: min(420px, calc(100vw - 24px)); }
+  /* Кружки цветов в половину ширины стали бы мельче пальца — растягиваем на обе колонки */
+  .theme-sec-colors { grid-column: 1 / -1; }
 }
 
 @media (max-width: 380px) {

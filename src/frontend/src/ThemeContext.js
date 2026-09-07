@@ -31,6 +31,26 @@ export const BG_PRESETS = [
   { name: "Белый", color: "#ffffff" },
 ];
 
+/**
+ * Стиль заднего фона. «Сетка» — CSS-сетка с волной, «Контуры» — светящаяся
+ * топографическая карта на WebGL (см. components/FlowBackground.jsx), берущая цвета
+ * из текущей палитры.
+ */
+export const BG_STYLE_PRESETS = [
+  { id: "grid", name: "Сетка" },
+  { id: "flow", name: "Контуры" },
+  { id: "none", name: "Нет" },
+];
+
+export const DEFAULT_BG_STYLE = "grid";
+
+/**
+ * Скорость анимации фона: множитель к «обычной». Уезжает в CSS-переменную --bg-speed,
+ * из которой её берут и сетка (calc по длительности), и шейдер контуров.
+ */
+export const DEFAULT_BG_SPEED = 1;
+export const BG_SPEED = { min: 0.25, max: 3, step: 0.25 };
+
 /** Масштаб скругления углов (--radius-scale). */
 export const RADIUS_PRESETS = [
   { name: "Острые", scale: 0.3 },
@@ -40,6 +60,14 @@ export const RADIUS_PRESETS = [
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 const normHex = (c, fallback) => (typeof c === "string" && HEX_RE.test(c) ? c.toLowerCase() : fallback);
+const normBgStyle = (s, fallback) =>
+  BG_STYLE_PRESETS.some((p) => p.id === s) ? s : fallback;
+const normSpeed = (v, fallback) => {
+  const n = typeof v === "number" ? v : parseFloat(v);
+  if (!(n > 0)) return fallback;
+  const snapped = Math.round(n / BG_SPEED.step) * BG_SPEED.step;
+  return Math.min(BG_SPEED.max, Math.max(BG_SPEED.min, snapped));
+};
 
 const lsGet = (key, fallback) => {
   try {
@@ -81,6 +109,12 @@ export function ThemeProvider({ children }) {
     const n = parseFloat(lsGet("ar-radius", "1"));
     return n >= 0 && n <= 3 ? n : 1;
   });
+  const [bgStyle, setBgStyleState] = useState(() =>
+    normBgStyle(lsGet("ar-bg-style", DEFAULT_BG_STYLE), DEFAULT_BG_STYLE));
+  // Предпросмотр чужой темы не трогает сохранённый выбор — просто перекрывает его.
+  const [bgStylePreview, setBgStylePreview] = useState(null);
+  const [bgSpeed, setBgSpeedState] = useState(() =>
+    normSpeed(lsGet("ar-bg-speed", DEFAULT_BG_SPEED), DEFAULT_BG_SPEED));
   const [bgAnim, setBgAnimState] = useState(() => {
     const stored = lsGet("ar-bg-anim", null);
     return stored === null ? defaultBgAnim() : stored !== "off";
@@ -101,6 +135,21 @@ export function ThemeProvider({ children }) {
     lsSet("ar-radius", String(radius));
   }, [radius]);
 
+  const activeBgStyle = bgStylePreview || bgStyle;
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-bg-style", activeBgStyle);
+  }, [activeBgStyle]);
+
+  useEffect(() => {
+    lsSet("ar-bg-style", bgStyle);
+  }, [bgStyle]);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty("--bg-speed", String(bgSpeed));
+    lsSet("ar-bg-speed", String(bgSpeed));
+  }, [bgSpeed]);
+
   useEffect(() => {
     if (bgAnim) document.documentElement.removeAttribute("data-bg-anim");
     else document.documentElement.setAttribute("data-bg-anim", "off");
@@ -111,6 +160,11 @@ export function ThemeProvider({ children }) {
   const setBg = useCallback((c) => setBgState(normHex(c, DEFAULT_BG)), []);
   const setRadius = useCallback((r) => setRadiusState(typeof r === "number" && r >= 0 && r <= 3 ? r : 1), []);
   const setBgAnim = useCallback((v) => setBgAnimState(!!v), []);
+  const setBgSpeed = useCallback((v) => setBgSpeedState((prev) => normSpeed(v, prev)), []);
+  const setBgStyle = useCallback((s) => {
+    setBgStylePreview(null);
+    setBgStyleState((prev) => normBgStyle(s, prev));
+  }, []);
 
   /**
    * Живой предпросмотр темы: применяет CSS-переменные напрямую к :root, НЕ трогая состояние
@@ -126,29 +180,39 @@ export function ThemeProvider({ children }) {
       if (t.bgAnim) root.removeAttribute("data-bg-anim");
       else root.setAttribute("data-bg-anim", "off");
     }
-  }, [accent, bg]);
+    // Старые расшаренные темы без скорости приходят нулём — оставляем свою.
+    if (t.bgSpeed) root.style.setProperty("--bg-speed", String(normSpeed(t.bgSpeed, bgSpeed)));
+    if (t.bgStyle) setBgStylePreview(normBgStyle(t.bgStyle, bgStyle));
+  }, [accent, bg, bgStyle, bgSpeed]);
 
   /** Возвращает оформление к сохранённому (снимает предпросмотр). */
   const endPreview = useCallback(() => {
+    setBgStylePreview(null);
     const root = document.documentElement;
     root.style.setProperty("--accent", accent);
     applyPalette(root, bg);
     root.style.setProperty("--radius-scale", String(radius));
+    root.style.setProperty("--bg-speed", String(bgSpeed));
     if (bgAnim) root.removeAttribute("data-bg-anim");
     else root.setAttribute("data-bg-anim", "off");
-  }, [accent, bg, radius, bgAnim]);
+  }, [accent, bg, radius, bgAnim, bgSpeed]);
 
   const resetAll = useCallback(() => {
     setAccentState(DEFAULT_ACCENT);
     setBgState(DEFAULT_BG);
     setRadiusState(1);
     setBgAnimState(defaultBgAnim());
+    setBgStyleState(DEFAULT_BG_STYLE);
+    setBgStylePreview(null);
+    setBgSpeedState(DEFAULT_BG_SPEED);
   }, []);
 
   const isDefault =
     accent.toLowerCase() === DEFAULT_ACCENT.toLowerCase() &&
     bg.toLowerCase() === DEFAULT_BG.toLowerCase() &&
     radius === 1 &&
+    bgStyle === DEFAULT_BG_STYLE &&
+    bgSpeed === DEFAULT_BG_SPEED &&
     bgAnim === defaultBgAnim();
 
   return (
@@ -166,6 +230,13 @@ export function ThemeProvider({ children }) {
         radiusPresets: RADIUS_PRESETS,
         bgAnim,
         setBgAnim,
+        bgSpeed,
+        setBgSpeed,
+        bgSpeedRange: BG_SPEED,
+        bgStyle,
+        setBgStyle,
+        activeBgStyle,
+        bgStylePresets: BG_STYLE_PRESETS,
         previewTheme,
         endPreview,
         resetAll,

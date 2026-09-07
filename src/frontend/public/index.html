@@ -50,6 +50,8 @@
           var rs = parseFloat(ls.getItem("ar-radius"));
           if (rs >= 0 && rs <= 3) s.setProperty("--radius-scale", String(rs));
           if (ls.getItem("ar-bg-anim") === "off") d.setAttribute("data-bg-anim", "off");
+          var bs = ls.getItem("ar-bg-style");
+          d.setAttribute("data-bg-style", bs === "flow" || bs === "none" ? bs : "grid");
         } catch (e) {}
       })();
     </script>
